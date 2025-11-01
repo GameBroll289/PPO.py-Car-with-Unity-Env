@@ -3,9 +3,9 @@ import mmap
 import struct
 import time
 
-# -------------------------
+# ------------------------
 # Configuration
-# -------------------------
+# ------------------------
 slots_config = {
     'ray_distances': (0, 8),   # slots 0-7
     'ray_hits': (8, 16),       # slots 8-15
