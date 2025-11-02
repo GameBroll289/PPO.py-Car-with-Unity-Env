@@ -3,8 +3,11 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 
+
 public class CarRaycastSensor2D : MonoBehaviour
 {
+ 
+    public static float reward = 0f;
     public float rayLength = 10f;
     public LayerMask obstacleMask;
 
@@ -88,7 +91,6 @@ public class CarRaycastSensor2D : MonoBehaviour
             }
         }
 
-        float reward = 0.5f;
         float done = 0f;
 
         // Write state to shared memory
@@ -104,9 +106,10 @@ public class CarRaycastSensor2D : MonoBehaviour
         float steering = ReadFloat(19); //4
 
         // Debug.Log to console
-        Debug.Log($"{acceleration};{steering};{reward};{done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; Rays: {string.Join(",",rayDistances)}; Hits: {string.Join(";",HitsInfo)}");
+        //Debug.Log($"{acceleration};{steering};Reward: {reward};{done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
+        reward = 0;
     }
-    
+
 
     void OnApplicationQuit()
     {

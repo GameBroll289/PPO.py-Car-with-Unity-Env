@@ -117,8 +117,6 @@ class UnityRAMEnv(gym.Env):
         action: array-like of two ints (0..2)
         """
         self.episode_steps += 1
-        print("Step:", self.episode_steps)
-        print("Action indices:", action)
 
         speed_idx = int(action[0])
         steer_idx = int(action[1])
@@ -141,6 +139,8 @@ class UnityRAMEnv(gym.Env):
             done = True
 
         info = {}
+        print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
+        print("Action indices:", action)
         return obs, float(reward), done, info
 
 
@@ -220,11 +220,12 @@ def main():
     model_path = os.path.join(script_dir, "car_agent")
 
     # Mode and other configs hardcoded
-    print("(T)rain or (I)nfer?")
+    print("(T)rain or (I)nfer?",end=' ')
     if input().lower().startswith('t'):
         mode = "train"
     else:
         mode = "infer"
+    sleep_between_steps = 0.0
     deterministic = True
     stepwait = 0.04
     timesteps = 5000#20000
@@ -243,10 +244,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-#python main.py --mode train --modelpath car_agent --timesteps 100000 --stepwait 0.02
-#python main.py --mode train --modelpath "C:\Users\Dell\Unity Projects\PPO.py Car with Unity Env\PPO AI.py" --timesteps 500 --stepwait 0.02
-#python PPO AI.py --mode train --modelpath --timesteps 500 --stepwait 0.02
-#python ".\PPO AI.py" --mode train --timesteps 500
 
 
 

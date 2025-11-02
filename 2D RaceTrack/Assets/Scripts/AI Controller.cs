@@ -41,9 +41,9 @@ public class AICarController : MonoBehaviour
         return value;
     }
 
-    void OnDestroy()
+    void OnApplicationQuit()
     {
-        accessor.Dispose();
-        mmf.Dispose();
+        accessor?.Dispose();
+        mmf?.Dispose();
     }
 }

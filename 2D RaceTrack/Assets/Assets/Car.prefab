@@ -525,7 +525,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rb: {fileID: 998120813324748620}
   speed: 50
-  turnSpeed: 10000
+  turnSpeed: 100
 --- !u!70 &7149658157586762389
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
