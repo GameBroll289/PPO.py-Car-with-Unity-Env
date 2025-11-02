@@ -117,6 +117,8 @@ class UnityRAMEnv(gym.Env):
         action: array-like of two ints (0..2)
         """
         self.episode_steps += 1
+        print("Step:", self.episode_steps)
+        print("Action indices:", action)
 
         speed_idx = int(action[0])
         steer_idx = int(action[1])
@@ -211,31 +213,40 @@ def train_model(mm, model_path, total_timesteps=10000, step_wait=0.02, save_inte
 # CLI entrypoint
 # -------------------------
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["infer", "train"], default="infer",
-                        help="infer: load model and run; train: train a model with Unity env")
-    parser.add_argument("--modelpath", type=str, required=True, help="path to save/load model (.zip)")
-    parser.add_argument("--timesteps", type=int, default=20000, help="timesteps when training")
-    parser.add_argument("--sleep", type=float, default=0.0, help="sleep between inference steps (sec)")
-    parser.add_argument("--deterministic", action="store_true", help="use deterministic policy at inference")
-    parser.add_argument("--stepwait", type=float, default=0.02, help="env step_wait during training (sec)")
-    args = parser.parse_args()
+    import os
+
+    # Relative model path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(script_dir, "car_agent")
+
+    # Mode and other configs hardcoded
+    print("(T)rain or (I)nfer?")
+    if input().lower().startswith('t'):
+        mode = "train"
+    else:
+        mode = "infer"
+    deterministic = True
+    stepwait = 0.04
+    timesteps = 5000#20000
 
     # open mmap
     mm = open_mmap()
 
-    if args.mode == "infer":
-        if not os.path.exists(args.modelpath + ".zip") and not os.path.exists(args.modelpath):
-            print("Model file not found:", args.modelpath)
-            print("If you saved with model.save('path'), SB3 will create path.zip; supply that path.")
-            return
-        run_inference(mm, args.modelpath, deterministic=args.deterministic, sleep_between_steps=args.sleep)
-
-    elif args.mode == "train":
-        train_model(mm, args.modelpath, total_timesteps=args.timesteps, step_wait=args.stepwait)
+    if mode == "infer":
+        run_inference(mm, model_path, deterministic=deterministic, sleep_between_steps=sleep_between_steps)
+    elif mode == "train":
+        train_model(mm, model_path, total_timesteps=timesteps, step_wait=stepwait)
 
     mm.close()
 
 
 if __name__ == "__main__":
     main()
+
+#python main.py --mode train --modelpath car_agent --timesteps 100000 --stepwait 0.02
+#python main.py --mode train --modelpath "C:\Users\Dell\Unity Projects\PPO.py Car with Unity Env\PPO AI.py" --timesteps 500 --stepwait 0.02
+#python PPO AI.py --mode train --modelpath --timesteps 500 --stepwait 0.02
+#python ".\PPO AI.py" --mode train --timesteps 500
+
+
+

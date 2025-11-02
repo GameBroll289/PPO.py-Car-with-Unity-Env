@@ -364,6 +364,7 @@ GameObject:
   - component: {fileID: 7149658157586762389}
   - component: {fileID: 7462653149305656822}
   - component: {fileID: 4057724617437978868}
+  - component: {fileID: 1136798410924513695}
   m_Layer: 0
   m_Name: Car
   m_TagString: Untagged
@@ -523,8 +524,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rb: {fileID: 998120813324748620}
-  speed: 5
-  turnSpeed: 100
+  speed: 50
+  turnSpeed: 10000
 --- !u!70 &7149658157586762389
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -597,6 +598,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e1b53e1f5d8ccf84dad40de531dc03c7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1136798410924513695
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7540198923765980880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31508fcecc1deb54d8cd1b51572d10f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &8690129827105754336
