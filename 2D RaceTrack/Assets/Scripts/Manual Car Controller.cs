@@ -16,12 +16,12 @@ public class ManualCarController : MonoBehaviour
     }
 
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
         float move = Input.GetAxis("Vertical") * speed * Time.deltaTime;
         float turn = Input.GetAxis("Horizontal") * turnSpeed * Time.deltaTime;
 
-        rb.AddForce(transform.up * move, ForceMode2D.Impulse);
+        rb.AddForce(transform.up * move, ForceMode2D.Force);
         rb.MoveRotation(rb.rotation - turn);
     }
 }

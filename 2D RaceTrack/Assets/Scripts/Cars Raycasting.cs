@@ -46,7 +46,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         accessor = mmf.CreateViewAccessor(0, totalSize, MemoryMappedFileAccess.ReadWrite);
     }
 
-    void Update()
+    void FixedUpdate()
     {
         float[] HitsInfo = new float[localDirections.Length]; // All elements are 0 by default
 
