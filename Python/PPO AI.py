@@ -1,42 +1,55 @@
+#!/usr/bin/env python3
+"""
+unity_sb3_runner.py
+
+- Uses a shared memory layout (unity_ram) to talk with Unity.
+- Action space: MultiDiscrete([3,3])  -> indices {0,1,2} mapped to [-1,0,1]
+- Two primary modes:
+    * infer  : loads a saved SB3 model and runs policy, writing actions to Unity
+    * train  : wraps the Unity memory as a Gym Env and runs SB3.PPO.learn(...)
+"""
+
+import argparse
 import time
 import numpy as np
 import mmap
 import struct
+import os
 
-# Optional: uncomment if you have SB3 installed and a trained model file
-# from stable_baselines3 import PPO
+# Stable Baselines3
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
+import gym
+from gym import spaces
 
 # ------------------------
-# Configuration (tweak these)
+# Shared-memory configuration (match your Unity layout)
 # ------------------------
 slots_config = {
     'ray_distances': (0, 8),   # slots 0-7
     'ray_hits': (8, 16),       # slots 8-15
     'reward': (16, 17),        # slot 16
     'done': (17, 18),          # slot 17
-    'actions': (18, 20),       # slots 18-19: speed, steering
+    'actions': (18, 20),       # slots 18-19: speed, steering (write)
     'speed': (20, 21)          # slot 20: current speed (read-only)
 }
-slot_count = 21  # total slots
-slot_size = 4    # float32 per slot
-
-# How often we let the policy choose a new action (seconds)
-decision_period = 0.05  # 20 Hz decision frequency (model runs at this cadence)
-
-# MINIMUM time an action must be held before allowing a new change (seconds).
-# This enforces the "key held" fairness; set to match human input responsiveness.
-min_action_duration = 0.12  # e.g., ~120 ms; tune to match Unity Input sensitivity if needed
-
-# -------------------------
-# Memory map setup (auto-create)
-# -------------------------
+slot_count = 21
+slot_size = 4  # float32
 size_bytes = slot_count * slot_size
-mm = mmap.mmap(-1, size_bytes, tagname='unity_ram', access=mmap.ACCESS_WRITE)
+TAGNAME = 'unity_ram'  # mmap tag used by Unity too
+
+# Mapping discrete indices -> -1,0,1
+INDEX_TO_CMD = [-1.0, 0.0, 1.0]
+
 
 # -------------------------
-# Helpers: read/write float32 slots
+# Memory map helpers
 # -------------------------
-def read_slots(start, end):
+def open_mmap():
+    mm = mmap.mmap(-1, size_bytes, tagname=TAGNAME, access=mmap.ACCESS_WRITE)
+    return mm
+
+def read_slots(mm, start, end):
     mm.seek(start * slot_size)
     vals = []
     for _ in range(end - start):
@@ -44,102 +57,185 @@ def read_slots(start, end):
         vals.append(struct.unpack('<f', b)[0])
     return vals
 
-def write_slots(start, end, values):
-    # write float32 values into consecutive slots
+def write_slots(mm, start, end, values):
     mm.seek(start * slot_size)
     for v in values:
         mm.write(struct.pack('<f', float(v)))
     mm.flush()
 
 # -------------------------
-# Action mapping utilities
+# Simple Gym Env wrapper using shared memory
 # -------------------------
-# Action values that will be written to Unity: -1, 0, +1
-mapping = [-1.0, 0.0, 1.0]
+class UnityRAMEnv(gym.Env):
+    """
+    Minimal Gym wrapper that interacts with Unity via shared memory.
 
-def action_index_to_cmd(index):
-    """Convert discrete index 0/1/2 -> -1/0/+1"""
-    return mapping[int(index)]
+    Observation:
+        - ray_distances (8)
+        - ray_hits (8)
+        - current_speed (1)
+        => total obs shape = (17,)
+    Action:
+        MultiDiscrete([3,3])  # speed_idx, steer_idx
+    Step semantics:
+        - write action into slots_config['actions']
+        - sleep for step_wait seconds (allow Unity to simulate)
+        - read new obs/reward/done
+    NOTE: Depending on your Unity setup you may need to adapt reset() and step() logic.
+    """
+    def __init__(self, mm, step_wait=0.02, max_episode_steps=1000):
+        super().__init__()
+        self.mm = mm
+        self.step_wait = step_wait
+        self.max_episode_steps = max_episode_steps
+        self.episode_steps = 0
+
+        # action and observation spaces
+        self.action_space = spaces.MultiDiscrete([3, 3])
+        # bounds: rays probably >=0; use wide bounds to be safe
+        low = np.array([-1000.0] * 17, dtype=np.float32)
+        high = np.array([1000.0] * 17, dtype=np.float32)
+        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
+    def _read_obs(self):
+        rays = read_slots(self.mm, *slots_config['ray_distances'])      # 8 floats
+        hits = read_slots(self.mm, *slots_config['ray_hits'])          # 8 floats
+        speed = read_slots(self.mm, *slots_config['speed'])[0]         # 1 float
+        obs = np.array(list(rays) + list(hits) + [speed], dtype=np.float32)
+        return obs
+
+    def reset(self):
+        # Optionally: write neutral actions and wait a short bit
+        write_slots(self.mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
+        time.sleep(self.step_wait)
+        self.episode_steps = 0
+        obs = self._read_obs()
+        return obs
+
+    def step(self, action):
+        """
+        action: array-like of two ints (0..2)
+        """
+        self.episode_steps += 1
+
+        speed_idx = int(action[0])
+        steer_idx = int(action[1])
+        speed_cmd = INDEX_TO_CMD[speed_idx]
+        steer_cmd = INDEX_TO_CMD[steer_idx]
+
+        # Write actions
+        write_slots(self.mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
+
+        # Allow Unity to step forward
+        time.sleep(self.step_wait)
+
+        # Read obs/reward/done
+        obs = self._read_obs()
+        reward = read_slots(self.mm, *slots_config['reward'])[0]
+        done = bool(read_slots(self.mm, *slots_config['done'])[0])
+
+        # Auto-terminate if max steps reached
+        if self.episode_steps >= self.max_episode_steps:
+            done = True
+
+        info = {}
+        return obs, float(reward), done, info
+
 
 # -------------------------
-# (Optional) Load a trained SB3 policy here
+# Inference loop: load model & run
 # -------------------------
-# If you have a saved model, uncomment and change path:
-# model = PPO.load("path_to_your_model.zip")
-# The environment action_space used during training should be MultiDiscrete([3,3])
-#
-# When using a model: call
-#   action, _states = model.predict(obs, deterministic=False)
-# where action will be an array-like of two ints in {0,1,2}
+def run_inference(mm, model_path, deterministic=False, sleep_between_steps=0.0):
+    """
+    Continuously read obs, call model.predict, and write actions to Unity.
+    - deterministic: whether to use deterministic policy (True) or stochastic (False)
+    - sleep_between_steps: small sleep to avoid 100% busy loop (seconds)
+    """
+    # Build a dummy observation of the correct shape for predict call
+    # Model was trained with obs shape (17,)
+    # We read obs directly from the map.
+    model = PPO.load(model_path)
+
+    print("Loaded model:", model_path)
+    try:
+        while True:
+            obs = np.array(read_slots(mm, *slots_config['ray_distances']) +
+                           read_slots(mm, *slots_config['ray_hits']) +
+                           [read_slots(mm, *slots_config['speed'])[0]], dtype=np.float32)
+            # reshaped to (n,) or (1, n) depending on model expectations
+            # SB3 accepts 1D obs
+            action, _states = model.predict(obs, deterministic=deterministic)
+            # action should be array-like [speed_idx, steer_idx]
+            speed_idx = int(action[0])
+            steer_idx = int(action[1])
+            speed_cmd = INDEX_TO_CMD[speed_idx]
+            steer_cmd = INDEX_TO_CMD[steer_idx]
+
+            write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
+
+            # optional debug print (comment out if noisy)
+            reward = read_slots(mm, *slots_config['reward'])[0]
+            done = bool(read_slots(mm, *slots_config['done'])[0])
+            current_speed = read_slots(mm, *slots_config['speed'])[0]
+            print(f"Obs speed={current_speed:.3f} | action idx=({speed_idx},{steer_idx}) -> cmds=({speed_cmd},{steer_cmd}) | reward={reward:.3f} done={done}")
+
+            if sleep_between_steps > 0:
+                time.sleep(sleep_between_steps)
+    except KeyboardInterrupt:
+        print("Inference interrupted by user.")
+
 
 # -------------------------
-# Example fallback policy: random (replace with model.predict)
+# Training helper: train PPO with Unity env
 # -------------------------
-import random
-def sample_random_action():
-    return (random.randrange(3), random.randrange(3))  # (speed_idx, steer_idx)
+def train_model(mm, model_path, total_timesteps=10000, step_wait=0.02, save_interval=5000):
+    """
+    Train a PPO agent by wrapping Unity with UnityRAMEnv.
+    This is a simple example using DummyVecEnv and single-threaded learning.
+    Training will require Unity to step the physics when actions are written.
+    """
+    def make_env():
+        return UnityRAMEnv(mm, step_wait=step_wait)
+
+    venv = DummyVecEnv([make_env])
+    # create model
+    model = PPO("MlpPolicy", venv, verbose=1, policy_kwargs=dict(net_arch=[256, 256]))
+    print("Starting training...")
+    model.learn(total_timesteps=total_timesteps)
+    # save
+    model.save(model_path)
+    print("Saved model to", model_path)
+
 
 # -------------------------
-# Main loop
+# CLI entrypoint
 # -------------------------
-try:
-    # store last action indices and timestamps (start neutral)
-    last_speed_idx = 1   # index 1 -> mapping[1] == 0.0 (neutral)
-    last_steer_idx = 1
-    last_action_time = time.time()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["infer", "train"], default="infer",
+                        help="infer: load model and run; train: train a model with Unity env")
+    parser.add_argument("--modelpath", type=str, required=True, help="path to save/load model (.zip)")
+    parser.add_argument("--timesteps", type=int, default=20000, help="timesteps when training")
+    parser.add_argument("--sleep", type=float, default=0.0, help="sleep between inference steps (sec)")
+    parser.add_argument("--deterministic", action="store_true", help="use deterministic policy at inference")
+    parser.add_argument("--stepwait", type=float, default=0.02, help="env step_wait during training (sec)")
+    args = parser.parse_args()
 
-    next_decision_time = time.time()
+    # open mmap
+    mm = open_mmap()
 
-    while True:
-        # Read state from Unity
-        ray_distances = read_slots(*slots_config['ray_distances'])
-        ray_hits = read_slots(*slots_config['ray_hits'])
-        reward = read_slots(*slots_config['reward'])[0]
-        done = bool(read_slots(*slots_config['done'])[0])
-        current_speed = read_slots(*slots_config['speed'])[0]
+    if args.mode == "infer":
+        if not os.path.exists(args.modelpath + ".zip") and not os.path.exists(args.modelpath):
+            print("Model file not found:", args.modelpath)
+            print("If you saved with model.save('path'), SB3 will create path.zip; supply that path.")
+            return
+        run_inference(mm, args.modelpath, deterministic=args.deterministic, sleep_between_steps=args.sleep)
 
-        now = time.time()
+    elif args.mode == "train":
+        train_model(mm, args.modelpath, total_timesteps=args.timesteps, step_wait=args.stepwait)
 
-        # Only ask model for a new action at decision_period intervals
-        if now >= next_decision_time:
-            next_decision_time = now + decision_period
-
-            # --- Replace the following line with model.predict when using SB3 ---
-            # Example:
-            # obs = build_observation(ray_distances, ray_hits, current_speed, ...)
-            # action_arr, _states = model.predict(obs, deterministic=False)
-            # speed_idx, steer_idx = int(action_arr[0]), int(action_arr[1])
-
-            # Fallback random (for testing) — replace this with your model.predict
-            speed_idx, steer_idx = sample_random_action()
-
-            # Enforce min_action_duration: don't allow immediate flip if too soon
-            time_since_last = now - last_action_time
-            if time_since_last < min_action_duration:
-                # keep previous actions (hold)
-                speed_idx = last_speed_idx
-                steer_idx = last_steer_idx
-            else:
-                # Accept the new action and update last_action_time
-                # (If you want to restrict only certain transitions, add logic here)
-                last_action_time = now
-                last_speed_idx = speed_idx
-                last_steer_idx = steer_idx
-
-            # Map discrete indices 0/1/2 -> -1/0/1
-            speed_cmd = action_index_to_cmd(speed_idx)
-            steer_cmd = action_index_to_cmd(steer_idx)
-
-            # Write actions to shared memory
-            actions = [speed_cmd, steer_cmd]
-            write_slots(*slots_config['actions'], values=actions)
-
-        # Debug print (throttle down frequency)
-        # You can print less often or log to file to avoid slowing loop
-        # Print current status at some interval:
-        print(f"[{time.strftime('%H:%M:%S')}] Reward:{reward:.3f} Done:{done} Speed:{current_speed:.3f} Actions:{[last_speed_idx,last_steer_idx]} -> {action_index_to_cmd(last_speed_idx)},{action_index_to_cmd(last_steer_idx)} Rays:{ray_distances} Hits:{ray_hits}")
-        # Sleep briefly to avoid busy loop; decision cadence controls model calls
-        time.sleep(0.01)
-
-except KeyboardInterrupt:
     mm.close()
+
+
+if __name__ == "__main__":
+    main()
