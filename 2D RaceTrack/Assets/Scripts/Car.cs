@@ -32,6 +32,8 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
+            CarRaycastSensor2D.reward = -1f;
+            StartCoroutine(GiveReward());
         }
     }
 
@@ -43,20 +45,27 @@ public class Car : MonoBehaviour
             if (goal.goalNumber == score)
             {
                 score++;
-                if (canGiveReward && other.CompareTag("Player"))
+                if (canGiveReward)
                 {
+                    CarRaycastSensor2D.reward = 1f;
                     StartCoroutine(GiveReward());
                 }
             }
             else if (goal.goalNumber < score)
             {
-                CarRaycastSensor2D.reward = -0.3f;
-                Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
+                if (canGiveReward)
+                {
+                    CarRaycastSensor2D.reward = -0.3f;
+                    StartCoroutine(GiveReward());
+                }
             }
             else if (goal.goalNumber > score)
             {
-                CarRaycastSensor2D.reward = -1f;
-                Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
+                if (canGiveReward)
+                {
+                    CarRaycastSensor2D.reward = -0.5f;
+                    StartCoroutine(GiveReward());
+                }
             }
             }
     }
@@ -65,12 +74,12 @@ public class Car : MonoBehaviour
         private IEnumerator GiveReward()
         {
             canGiveReward = false;  // prevent multiple rewards immediately
-            CarRaycastSensor2D.reward = 1f;           // give the reward
             Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
 
             // Wait for 0.5 seconds
-            yield return new WaitForSeconds(0.3f);
+            yield return new WaitForSeconds(0.25f);
 
             canGiveReward = true;   // allow reward again
+            CarRaycastSensor2D.reward = 0f; // reset reward
         }
 }
