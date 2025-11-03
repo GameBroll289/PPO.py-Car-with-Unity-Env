@@ -8,11 +8,15 @@ public class AICarController : MonoBehaviour
     public float speed;
     public float turnSpeed;
     private Rigidbody2D rb;
+    const string memoryName = "unity_ram";
     private MemoryMappedFile mmf;
     private MemoryMappedViewAccessor accessor;
     private const int slotSize = 4;
     private const int actionStart = 18;
     private const int actionCount = 2;
+
+    const int slotCount = 21;   // must match Python
+    const int totalSize = slotCount * slotSize;
 
     void Start()
     {
@@ -21,8 +25,8 @@ public class AICarController : MonoBehaviour
         turnSpeed = car.turnSpeed;
         rb = car.rb;
 
-        mmf = MemoryMappedFile.OpenExisting("unity_ram");
-        accessor = mmf.CreateViewAccessor();
+        mmf = MemoryMappedFile.CreateOrOpen(memoryName, totalSize, MemoryMappedFileAccess.ReadWrite);
+        accessor = mmf.CreateViewAccessor(0, totalSize, MemoryMappedFileAccess.ReadWrite);
     }
 
     void FixedUpdate()

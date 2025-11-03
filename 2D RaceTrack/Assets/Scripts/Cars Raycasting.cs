@@ -39,10 +39,7 @@ public class CarRaycastSensor2D : MonoBehaviour
 
     void Start()
     {
-        filePath = @"C:\Users\Dell\Desktop\Ahmed ki bla\Files\rays.txt";
-
-        // Ensure the directory exists
-        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+        
         mmf = MemoryMappedFile.CreateOrOpen(memoryName, totalSize, MemoryMappedFileAccess.ReadWrite);
 
 

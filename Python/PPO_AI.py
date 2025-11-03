@@ -41,6 +41,8 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
+global Episode
+Episode=0
 
 # -------------------------
 # Memory map helpers
@@ -83,11 +85,10 @@ class UnityRAMEnv(gym.Env):
         - read new obs/reward/done
     NOTE: Depending on your Unity setup you may need to adapt reset() and step() logic.
     """
-    def __init__(self, mm, step_wait=0.02, max_episode_steps=1000):
+    def __init__(self, mm, step_wait=0.04):
         super().__init__()
         self.mm = mm
         self.step_wait = step_wait
-        self.max_episode_steps = max_episode_steps
         self.episode_steps = 0
 
         # action and observation spaces
@@ -117,6 +118,7 @@ class UnityRAMEnv(gym.Env):
         action: array-like of two ints (0..2)
         """
         self.episode_steps += 1
+        
 
         speed_idx = int(action[0])
         steer_idx = int(action[1])
@@ -133,13 +135,14 @@ class UnityRAMEnv(gym.Env):
         obs = self._read_obs()
         reward = read_slots(self.mm, *slots_config['reward'])[0]
         done = bool(read_slots(self.mm, *slots_config['done'])[0])
+        if done:
+            global Episode
+            Episode+=1
+            print("Episode: ", Episode)
 
-        # Auto-terminate if max steps reached
-        if self.episode_steps >= self.max_episode_steps:
-            done = True
 
         info = {}
-        # print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
+        print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
         # print("Action indices:", action)
         return obs, float(reward), done, info
 
