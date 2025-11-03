@@ -25,9 +25,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         Vector2.left,                                    // Left
         (Vector2.up - Vector2.right).normalized          // Front-Left
     };
-    private string filePath;
-
-
+    
     // Memory Mapped File variables
     const string memoryName = "unity_ram";
     const int slotCount = 21;   // must match Python

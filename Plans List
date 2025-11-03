@@ -1,0 +1,7 @@
+Give reward if the speed is above specific value or the faster it is the more the reward.
+
+Set Eval according to eipsodes. 
+
+The reward given by each goal mutiplies by your score
+
+Figure out the clipped advantage and fine tune it
