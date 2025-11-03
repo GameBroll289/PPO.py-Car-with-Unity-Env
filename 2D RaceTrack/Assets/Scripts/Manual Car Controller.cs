@@ -2,8 +2,8 @@ using UnityEngine;
 
 public class ManualCarController : MonoBehaviour
 {
-    private float speed;
-    private float turnSpeed;
+    public float speed;
+    public float turnSpeed;
     private Rigidbody2D rb;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -22,6 +22,7 @@ public class ManualCarController : MonoBehaviour
         float turn = Input.GetAxis("Horizontal") * turnSpeed * Time.deltaTime;
 
         rb.AddForce(transform.up * move, ForceMode2D.Force);
-        rb.MoveRotation(rb.rotation - turn);
+        //rb.MoveRotation(rb.rotation - turn);
+        rb.AddTorque(-turn * turnSpeed * Time.deltaTime, ForceMode2D.Force);
     }
 }

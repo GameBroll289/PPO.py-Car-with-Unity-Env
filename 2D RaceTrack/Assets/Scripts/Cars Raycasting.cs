@@ -91,13 +91,13 @@ public class CarRaycastSensor2D : MonoBehaviour
             }
         }
 
-        float done = 0f;
+        
 
         // Write state to shared memory
         WriteFloats(0, rayDistances);
         WriteFloats(8, HitsInfo);
         WriteFloat(16, reward);
-        WriteFloat(17, done);
+        WriteFloat(17, Car.done);
         WriteFloat(20, (GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)); // Speed normalized
         accessor.Flush();
 
@@ -106,8 +106,8 @@ public class CarRaycastSensor2D : MonoBehaviour
         float steering = ReadFloat(19); //4
 
         // Debug.Log to console
-        Debug.Log($"{acceleration};{steering};Reward: {reward};{done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
-        //reward = 0;
+        Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
+        //Car.done = 0;
     }
 
 

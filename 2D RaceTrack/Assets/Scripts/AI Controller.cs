@@ -5,8 +5,8 @@ using System.Runtime.InteropServices;
 
 public class AICarController : MonoBehaviour
 {
-    private float speed;
-    private float turnSpeed;
+    public float speed;
+    public float turnSpeed;
     private Rigidbody2D rb;
     private MemoryMappedFile mmf;
     private MemoryMappedViewAccessor accessor;
@@ -31,7 +31,9 @@ public class AICarController : MonoBehaviour
         float turn = ReadSlot(actionStart + 1);
 
         rb.AddForce(transform.up * (move * speed * Time.deltaTime), ForceMode2D.Force);
-        rb.MoveRotation(rb.rotation - (turn * turnSpeed * Time.deltaTime));
+        // rb.MoveRotation(rb.rotation - (turn * turnSpeed * Time.deltaTime));
+        // rb.AddForce(transform.up * move, ForceMode2D.Force);
+        rb.AddTorque(-turn * turnSpeed * Time.deltaTime, ForceMode2D.Force);
     }
 
     float ReadSlot(int index)

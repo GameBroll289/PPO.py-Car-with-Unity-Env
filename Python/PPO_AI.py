@@ -139,15 +139,15 @@ class UnityRAMEnv(gym.Env):
             done = True
 
         info = {}
-        print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
-        print("Action indices:", action)
+        # print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
+        # print("Action indices:", action)
         return obs, float(reward), done, info
 
 
 # -------------------------
 # Inference loop: load model & run
 # -------------------------
-def run_inference(mm, model_path, deterministic=False, sleep_between_steps=0.0):
+def run_inference(mm, model_path, deterministic=False):
     """
     Continuously read obs, call model.predict, and write actions to Unity.
     - deterministic: whether to use deterministic policy (True) or stochastic (False)
@@ -181,8 +181,6 @@ def run_inference(mm, model_path, deterministic=False, sleep_between_steps=0.0):
             current_speed = read_slots(mm, *slots_config['speed'])[0]
             print(f"Obs speed={current_speed:.3f} | action idx=({speed_idx},{steer_idx}) -> cmds=({speed_cmd},{steer_cmd}) | reward={reward:.3f} done={done}")
 
-            if sleep_between_steps > 0:
-                time.sleep(sleep_between_steps)
     except KeyboardInterrupt:
         print("Inference interrupted by user.")
 
@@ -190,24 +188,32 @@ def run_inference(mm, model_path, deterministic=False, sleep_between_steps=0.0):
 # -------------------------
 # Training helper: train PPO with Unity env
 # -------------------------
-def train_model(mm, model_path, total_timesteps=10000, step_wait=0.02, save_interval=5000):
-    """
-    Train a PPO agent by wrapping Unity with UnityRAMEnv.
-    This is a simple example using DummyVecEnv and single-threaded learning.
-    Training will require Unity to step the physics when actions are written.
-    """
+def train_model(mm, model_path, step_wait=0.04):
     def make_env():
         return UnityRAMEnv(mm, step_wait=step_wait)
 
     venv = DummyVecEnv([make_env])
-    # create model
-    model = PPO("MlpPolicy", venv, verbose=1, policy_kwargs=dict(net_arch=[256, 256]))
-    print("Starting training...")
-    model.learn(total_timesteps=total_timesteps)
-    # save
-    model.save(model_path)
-    print("Saved model to", model_path)
+    model = PPO("MlpPolicy", venv, verbose=2, policy_kwargs=dict(net_arch=[256, 256]))
 
+    from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
+
+    stop_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=8,
+        min_evals=5,
+        verbose=2
+    )
+    eval_callback = EvalCallback(
+        eval_env=venv,
+        best_model_save_path='./best_model/',
+        log_path='./logs/',
+        eval_freq=5000,
+        callback_after_eval=stop_callback
+    )
+
+    print("Starting adaptive training...")
+    model.learn(total_timesteps=int(1e10), callback=eval_callback)
+    model.save(model_path)
+    print("Training complete. Best model saved.")
 
 # -------------------------
 # CLI entrypoint
@@ -225,18 +231,17 @@ def main():
         mode = "train"
     else:
         mode = "infer"
-    sleep_between_steps = 0.0
     deterministic = True
     stepwait = 0.04
-    timesteps = 5000#20000
+    timesteps = 10000#20000
 
     # open mmap
     mm = open_mmap()
 
     if mode == "infer":
-        run_inference(mm, model_path, deterministic=deterministic, sleep_between_steps=sleep_between_steps)
+        run_inference(mm, model_path, deterministic=deterministic)
     elif mode == "train":
-        train_model(mm, model_path, total_timesteps=timesteps, step_wait=stepwait)
+        train_model(mm, model_path, step_wait=stepwait)
 
     mm.close()
 

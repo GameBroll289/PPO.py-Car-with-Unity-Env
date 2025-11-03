@@ -5,6 +5,7 @@ using UnityEngine;
 public class Car : MonoBehaviour
 {
     public static int score = 0;
+    public static int done = 0;
     private bool canGiveReward = true;
     public Rigidbody2D rb;
     public float speed = 5;
@@ -33,7 +34,9 @@ public class Car : MonoBehaviour
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
             CarRaycastSensor2D.reward = -1f;
+            done = 1;
             StartCoroutine(GiveReward());
+            StartCoroutine(Done());
         }
     }
 
@@ -67,19 +70,26 @@ public class Car : MonoBehaviour
                     StartCoroutine(GiveReward());
                 }
             }
-            }
-    }
-    
-
-        private IEnumerator GiveReward()
-        {
-            canGiveReward = false;  // prevent multiple rewards immediately
-            Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
-
-            // Wait for 0.5 seconds
-            yield return new WaitForSeconds(0.25f);
-
-            canGiveReward = true;   // allow reward again
-            CarRaycastSensor2D.reward = 0f; // reset reward
         }
+    }
+
+
+    private IEnumerator GiveReward()
+    {
+        canGiveReward = false;  // prevent multiple rewards immediately
+        Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
+
+        yield return new WaitForSeconds(0.04f);
+        CarRaycastSensor2D.reward = 0f;
+
+        // Wait for 0.5 seconds
+        yield return new WaitForSeconds(0.25f);
+
+        canGiveReward = true; 
+    }
+    private IEnumerator Done()
+    {
+        yield return new WaitForSeconds(0.04f);
+        done = 0;
+    }
 }
