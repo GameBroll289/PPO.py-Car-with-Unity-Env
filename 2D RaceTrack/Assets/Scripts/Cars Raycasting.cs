@@ -87,7 +87,7 @@ public class CarRaycastSensor2D : MonoBehaviour
             }
         }
 
-        speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f;
+        speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 11f;
 
         // Write state to shared memory
         WriteFloats(0, rayDistances);

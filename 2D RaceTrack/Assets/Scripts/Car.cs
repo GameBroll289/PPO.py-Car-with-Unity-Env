@@ -50,7 +50,7 @@ public class Car : MonoBehaviour
                 score++;
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = 2.8f;
+                    CarRaycastSensor2D.reward = 5f+(score*score);
                     StartCoroutine(GiveReward());
                 }
             }
