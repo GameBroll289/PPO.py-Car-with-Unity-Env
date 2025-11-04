@@ -198,23 +198,9 @@ def train_model(mm, model_path, step_wait=0.04):
     venv = DummyVecEnv([make_env])
     model = PPO("MlpPolicy", venv, verbose=2, policy_kwargs=dict(net_arch=[256, 256]))
 
-    from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
-
-    stop_callback = StopTrainingOnNoModelImprovement(
-        max_no_improvement_evals=8,
-        min_evals=5,
-        verbose=2
-    )
-    eval_callback = EvalCallback(
-        eval_env=venv,
-        best_model_save_path='./best_model/',
-        log_path='./logs/',
-        eval_freq=5000,
-        callback_after_eval=stop_callback
-    )
 
     print("Starting adaptive training...")
-    model.learn(total_timesteps=int(1e10), callback=eval_callback)
+    model.learn(total_timesteps=int(1e10))
     model.save(model_path)
     print("Training complete. Best model saved.")
 
