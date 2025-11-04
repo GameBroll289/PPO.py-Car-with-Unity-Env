@@ -33,7 +33,7 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
-            CarRaycastSensor2D.reward = -8f;
+            CarRaycastSensor2D.reward = -1.0f;
             done = 1;
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
@@ -50,7 +50,7 @@ public class Car : MonoBehaviour
                 score++;
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = 12f;
+                    CarRaycastSensor2D.reward = 2.8f;
                     StartCoroutine(GiveReward());
                 }
             }
@@ -58,7 +58,7 @@ public class Car : MonoBehaviour
             {
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = -4f;
+                    CarRaycastSensor2D.reward = -0.6f;
                     StartCoroutine(GiveReward());
                 }
             }
@@ -66,13 +66,12 @@ public class Car : MonoBehaviour
             {
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = -6f;
+                    CarRaycastSensor2D.reward = -0.8f;
                     StartCoroutine(GiveReward());
                 }
             }
         }
     }
-
 
     private IEnumerator GiveReward()
     {
@@ -80,16 +79,17 @@ public class Car : MonoBehaviour
         Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
 
         yield return new WaitForSeconds(0.04f);
-        CarRaycastSensor2D.reward = -0.3f;
+        CarRaycastSensor2D.reward = -0.01f;
 
         // Wait for 0.5 seconds
-        yield return new WaitForSeconds(0.25f);
+        yield return new WaitForSeconds(0.16f);
 
-        canGiveReward = true; 
+        canGiveReward = true;
     }
     private IEnumerator Done()
     {
         yield return new WaitForSeconds(0.04f);
         done = 0;
     }
+    
 }

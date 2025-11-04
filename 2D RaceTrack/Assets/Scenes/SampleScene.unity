@@ -5958,7 +5958,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 250807171831772111, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: turnSpeed
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 998120813324748620, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: m_AngularDamping
@@ -5970,7 +5970,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1136798410924513695, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: turnSpeed
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 4057724617437978868, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: speed
@@ -5978,7 +5978,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4057724617437978868, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: turnSpeed
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6469853557829559332, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: m_LocalPosition.x
