@@ -206,7 +206,7 @@ def train_model(mm, model_path, step_wait=0.04):
         return UnityRAMEnv(mm, step_wait=step_wait)
 
     venv = DummyVecEnv([make_env])
-    model = PPO("MlpPolicy", venv, verbose=2, policy_kwargs=dict(net_arch=[256, 256]))
+    model = PPO("MlpPolicy", venv, n_steps=50,  verbose=2, policy_kwargs=dict(net_arch=[256, 256]))
 
 
     print("Starting adaptive training...")
