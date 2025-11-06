@@ -364,6 +364,7 @@ GameObject:
   - component: {fileID: 7149658157586762389}
   - component: {fileID: 7462653149305656822}
   - component: {fileID: 4057724617437978868}
+  - component: {fileID: 1136798410924513695}
   m_Layer: 0
   m_Name: Car
   m_TagString: Untagged
@@ -459,8 +460,8 @@ Rigidbody2D:
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
   m_Mass: 1
-  m_LinearDamping: 1
-  m_AngularDamping: 1
+  m_LinearDamping: 1.5
+  m_AngularDamping: 3
   m_GravityScale: 0
   m_Material: {fileID: 0}
   m_IncludeLayers:
@@ -523,8 +524,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rb: {fileID: 998120813324748620}
-  speed: 5
-  turnSpeed: 100
+  speed: 110
+  turnSpeed: 11
 --- !u!70 &7149658157586762389
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -574,11 +575,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b004ae57baf8c148954d0353f669d80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rayLength: 4
+  rayLength: 30
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
+  WallMask:
+    serializedVersion: 2
+    m_Bits: 0
   rayDistances:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  WallDistances:
   - 0
   - 0
   - 0
@@ -599,6 +612,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e1b53e1f5d8ccf84dad40de531dc03c7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  speed: 0
+  turnSpeed: 0
+--- !u!114 &1136798410924513695
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7540198923765980880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31508fcecc1deb54d8cd1b51572d10f4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speed: 0
+  turnSpeed: 0
 --- !u!1 &8690129827105754336
 GameObject:
   m_ObjectHideFlags: 0

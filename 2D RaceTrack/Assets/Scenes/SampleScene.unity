@@ -131,7 +131,7 @@ GameObject:
   - component: {fileID: 120406123}
   - component: {fileID: 120406125}
   - component: {fileID: 120406124}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (16)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -312,7 +312,7 @@ GameObject:
   - component: {fileID: 134319022}
   - component: {fileID: 134319024}
   - component: {fileID: 134319023}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (17)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -493,7 +493,7 @@ GameObject:
   - component: {fileID: 135864668}
   - component: {fileID: 135864670}
   - component: {fileID: 135864669}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (11)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -662,74 +662,6 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
---- !u!1 &139454286
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 139454287}
-  - component: {fileID: 139454289}
-  - component: {fileID: 139454288}
-  m_Layer: 0
-  m_Name: EventSystem
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &139454287
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 139454286}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 29.567999, y: 1.1999999, z: 0}
-  m_LocalScale: {x: 3.2, y: 2.5, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 7323117914308989017}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &139454288
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 139454286}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f231c4fb786f3946a6b90b886c48677, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_SendPointerHoverToParent: 1
-  m_HorizontalAxis: Horizontal
-  m_VerticalAxis: Vertical
-  m_SubmitButton: Submit
-  m_CancelButton: Cancel
-  m_InputActionsPerSecond: 10
-  m_RepeatDelay: 0.5
-  m_ForceModuleActive: 0
---- !u!114 &139454289
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 139454286}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_FirstSelected: {fileID: 0}
-  m_sendNavigationEvents: 1
-  m_DragThreshold: 10
 --- !u!1 &175413152
 GameObject:
   m_ObjectHideFlags: 0
@@ -742,7 +674,7 @@ GameObject:
   - component: {fileID: 175413154}
   - component: {fileID: 175413156}
   - component: {fileID: 175413155}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (10)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -923,7 +855,7 @@ GameObject:
   - component: {fileID: 181328823}
   - component: {fileID: 181328825}
   - component: {fileID: 181328824}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (3)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1104,7 +1036,7 @@ GameObject:
   - component: {fileID: 283369503}
   - component: {fileID: 283369505}
   - component: {fileID: 283369504}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (12)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1285,7 +1217,7 @@ GameObject:
   - component: {fileID: 408524873}
   - component: {fileID: 408524875}
   - component: {fileID: 408524874}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (21)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1466,7 +1398,7 @@ GameObject:
   - component: {fileID: 424588101}
   - component: {fileID: 424588103}
   - component: {fileID: 424588102}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (2)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1644,7 +1576,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 457626494}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Walls
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1701,7 +1633,7 @@ GameObject:
   - component: {fileID: 481651469}
   - component: {fileID: 481651471}
   - component: {fileID: 481651470}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (19)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -1882,7 +1814,7 @@ GameObject:
   - component: {fileID: 487986991}
   - component: {fileID: 487986993}
   - component: {fileID: 487986992}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (1)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -2063,7 +1995,7 @@ GameObject:
   - component: {fileID: 490975037}
   - component: {fileID: 490975039}
   - component: {fileID: 490975038}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (22)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -2465,7 +2397,7 @@ GameObject:
   - component: {fileID: 813145782}
   - component: {fileID: 813145784}
   - component: {fileID: 813145783}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (6)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -2711,7 +2643,7 @@ GameObject:
   - component: {fileID: 918474921}
   - component: {fileID: 918474923}
   - component: {fileID: 918474922}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (23)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -2957,7 +2889,7 @@ GameObject:
   - component: {fileID: 1029780053}
   - component: {fileID: 1029780055}
   - component: {fileID: 1029780054}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (13)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -3333,7 +3265,7 @@ GameObject:
   - component: {fileID: 1149370708}
   - component: {fileID: 1149370710}
   - component: {fileID: 1149370709}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (15)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -3579,7 +3511,7 @@ GameObject:
   - component: {fileID: 1255254333}
   - component: {fileID: 1255254335}
   - component: {fileID: 1255254334}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (8)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -3760,7 +3692,7 @@ GameObject:
   - component: {fileID: 1260134527}
   - component: {fileID: 1260134529}
   - component: {fileID: 1260134528}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (4)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -4006,7 +3938,7 @@ GameObject:
   - component: {fileID: 1533708590}
   - component: {fileID: 1533708592}
   - component: {fileID: 1533708591}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (20)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -4274,7 +4206,7 @@ GameObject:
   - component: {fileID: 1557052372}
   - component: {fileID: 1557052374}
   - component: {fileID: 1557052373}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (18)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -4585,7 +4517,7 @@ GameObject:
   - component: {fileID: 1625580180}
   - component: {fileID: 1625580182}
   - component: {fileID: 1625580181}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (9)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -4766,7 +4698,7 @@ GameObject:
   - component: {fileID: 1685726533}
   - component: {fileID: 1685726535}
   - component: {fileID: 1685726534}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (14)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -5077,7 +5009,7 @@ GameObject:
   - component: {fileID: 1884627696}
   - component: {fileID: 1884627698}
   - component: {fileID: 1884627697}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square (5)
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -5713,7 +5645,7 @@ GameObject:
   - component: {fileID: 2094760048}
   - component: {fileID: 2094760050}
   - component: {fileID: 2094760049}
-  m_Layer: 3
+  m_Layer: 6
   m_Name: Square
   m_TagString: Wall
   m_Icon: {fileID: 0}
@@ -5882,11 +5814,6 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
---- !u!4 &7323117914308989017 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 6469853557829559332, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
-  m_PrefabInstance: {fileID: 8517337665476369278}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8503641208970816307
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5998,10 +5925,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects:
-    - targetCorrespondingSourceObject: {fileID: 6469853557829559332, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 139454287}
+    m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
 --- !u!1660057539 &9223372036854775807

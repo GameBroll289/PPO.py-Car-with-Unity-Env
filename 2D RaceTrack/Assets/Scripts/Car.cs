@@ -1,9 +1,12 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
 public class Car : MonoBehaviour
 {
     public static int score = 0;
+    public static int done = 0;
+    private bool canGiveReward = true;
     public Rigidbody2D rb;
     public float speed = 5;
     public float turnSpeed = 100;
@@ -29,23 +32,64 @@ public class Car : MonoBehaviour
             transform.position = new Vector2(-9.24f, -0.48f); // Reset position on collision with wall
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
+            score = 0;
+            CarRaycastSensor2D.reward = -2.4f;
+            done = 1;
+            StartCoroutine(GiveReward());
+            StartCoroutine(Done());
         }
     }
 
     private void OnTriggerEnter2D(Collider2D other)
-{
-    if (other.CompareTag("Goal"))
     {
-        Goals goal = other.GetComponent<Goals>();
-        if (goal.goalNumber == score)
+        if (other.CompareTag("Goal"))
         {
-            score++;
-            Debug.Log("Score: " + score);
-        }
-        else if (goal.goalNumber < score)
-        {
-            Debug.Log("You already passed this goal. Current Score: " + score);
+            Goals goal = other.GetComponent<Goals>();
+            if (goal.goalNumber == score)
+            {
+                score++;
+                if (canGiveReward)
+                {
+                    CarRaycastSensor2D.reward = 7f+(score*score);
+                    StartCoroutine(GiveReward());
+                }
+            }
+            else if (goal.goalNumber < score)
+            {
+                if (canGiveReward)
+                {
+                    CarRaycastSensor2D.reward = -1.2f;
+                    StartCoroutine(GiveReward());
+                }
+            }
+            else if (goal.goalNumber > score)
+            {
+                if (canGiveReward)
+                {
+                    CarRaycastSensor2D.reward = -1.6f;
+                    StartCoroutine(GiveReward());
+                }
+            }
         }
     }
-}
+
+    private IEnumerator GiveReward()
+    {
+        canGiveReward = false;  // prevent multiple rewards immediately
+        Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
+
+        yield return new WaitForSeconds(0.04f);
+        CarRaycastSensor2D.reward = -0.01f;
+
+        // Wait for 0.5 seconds
+        yield return new WaitForSeconds(0.16f);
+
+        canGiveReward = true;
+    }
+    private IEnumerator Done()
+    {
+        yield return new WaitForSeconds(0.04f);
+        done = 0;
+    }
+    
 }
