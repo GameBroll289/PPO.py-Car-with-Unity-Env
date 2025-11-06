@@ -10,10 +10,11 @@ public class CarRaycastSensor2D : MonoBehaviour
     public static float speed;
     public static float reward = 0.01f;
     public float rayLength = 10f;
-    public LayerMask obstacleMask;
+    public LayerMask obstacleMask, WallMask;
 
     [HideInInspector]
     public float[] rayDistances = new float[8];
+    public float[] WallDistances = new float[8];
 
     private Vector2[] localDirections = new Vector2[8]
     {
@@ -29,12 +30,16 @@ public class CarRaycastSensor2D : MonoBehaviour
     
     // Memory Mapped File variables
     const string memoryName = "unity_ram";
-    const int slotCount = 21;   // must match Python
+    const int slotCount = 29;   // must match Python
     const int slotSize = 4;     // float32
     const int totalSize = slotCount * slotSize;
 
     MemoryMappedFile mmf;
     MemoryMappedViewAccessor accessor;
+    void Awake() {
+    obstacleMask = LayerMask.GetMask("Raycast", "Wall");
+    WallMask = LayerMask.GetMask("Wall");
+}
 
     void Start()
     {
@@ -53,6 +58,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         {
             Vector2 direction = transform.TransformDirection(localDirections[i]);
             RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, rayLength, obstacleMask);
+            RaycastHit2D hitWall = Physics2D.Raycast(transform.position, direction, rayLength, WallMask);
 
             if (hit.collider != null)
             {
@@ -76,13 +82,17 @@ public class CarRaycastSensor2D : MonoBehaviour
                 }
 
                 rayDistances[i] = hit.distance / rayLength;
-                //if (Input.GetKey(KeyCode.Space)) // Only draw when space is held
+                WallDistances[i] = hitWall.distance / rayLength;
+                //Blue ray if something is hit
+                Debug.DrawRay(transform.position, direction * hitWall.distance, Color.chocolate);
                 Debug.DrawRay(transform.position, direction * hit.distance, Color.blue);
             }
             else
             {
                 rayDistances[i] = 1f;
-                //if (Input.GetKey(KeyCode.Space)) // Only draw when space is held
+                WallDistances[i] = 1f;
+                //Red ray if nothing is hit
+                Debug.DrawRay(transform.position, direction * rayLength, Color.darkRed);
                 Debug.DrawRay(transform.position, direction * rayLength, Color.red);
             }
         }
@@ -95,6 +105,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         WriteFloat(16, reward + speed); // Cumulative reward
         WriteFloat(17, Car.done);
         WriteFloat(20, (speed)); // Speed normalized
+        WriteFloats(21, WallDistances);
         accessor.Flush();
 
         // Read actions back from Python
@@ -102,7 +113,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         float steering = ReadFloat(19); //4
 
         // Debug.Log to console
-        Debug.Log($"{acceleration};{steering};Reward: {reward+speed};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
+        Debug.Log($"{acceleration};{steering};Reward: {reward+speed};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
         //Car.done = 0;
     }
 

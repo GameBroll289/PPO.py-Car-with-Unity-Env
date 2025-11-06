@@ -575,11 +575,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b004ae57baf8c148954d0353f669d80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rayLength: 4
+  rayLength: 30
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
+  WallMask:
+    serializedVersion: 2
+    m_Bits: 0
   rayDistances:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  WallDistances:
   - 0
   - 0
   - 0

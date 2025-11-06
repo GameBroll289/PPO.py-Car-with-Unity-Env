@@ -31,9 +31,10 @@ slots_config = {
     'reward': (16, 17),        # slot 16
     'done': (17, 18),          # slot 17
     'actions': (18, 20),       # slots 18-19: speed, steering (write)
-    'speed': (20, 21)          # slot 20: current speed (read-only)
+    'speed': (20, 21),          # slot 20: current speed (read-only)
+    'Wall_distances': (21, 29)   # slots 0-7
 }
-slot_count = 21
+slot_count = 29
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
 TAGNAME = 'unity_ram'  # mmap tag used by Unity too
@@ -73,10 +74,11 @@ class UnityRAMEnv(gym.Env):
     Minimal Gym wrapper that interacts with Unity via shared memory.
 
     Observation:
+        - wall_distances (8)
         - ray_distances (8)
         - ray_hits (8)
         - current_speed (1)
-        => total obs shape = (17,)
+        => total obs shape = (25,)
     Action:
         MultiDiscrete([3,3])  # speed_idx, steer_idx
     Step semantics:
@@ -94,15 +96,22 @@ class UnityRAMEnv(gym.Env):
         # action and observation spaces
         self.action_space = spaces.MultiDiscrete([3, 3])
         # bounds: rays probably >=0; use wide bounds to be safe
-        low = np.array([-1000.0] * 17, dtype=np.float32)
-        high = np.array([1000.0] * 17, dtype=np.float32)
+        low = np.array([-1000.0] * 25, dtype=np.float32)
+        high = np.array([1000.0] * 25, dtype=np.float32)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
     def _read_obs(self):
-        rays = read_slots(self.mm, *slots_config['ray_distances'])      # 8 floats
+        Hitrays = read_slots(self.mm, *slots_config['ray_distances'])      # 8 floats
+        Wallrays = read_slots(self.mm, *slots_config['Wall_distances'])      # 8 floats
         hits = read_slots(self.mm, *slots_config['ray_hits'])          # 8 floats
         speed = read_slots(self.mm, *slots_config['speed'])[0]         # 1 float
-        obs = np.array(list(rays) + list(hits) + [speed], dtype=np.float32)
+        obs = np.array(list(Wallrays) + list(Hitrays) + list(hits) + [speed], dtype=np.float32)
+        
+            # Sanity checks: replace any NaN/Inf with a safe fallback
+        if np.isnan(obs).any() or np.isinf(obs).any():
+            print("WARNING: invalid observation detected, replacing NaN/Inf with large value. obs:", obs)
+            obs = np.nan_to_num(obs, nan=1.0, posinf=1.0, neginf=-1.0).astype(np.float32)
+
         return obs
 
     def reset(self):
@@ -142,7 +151,7 @@ class UnityRAMEnv(gym.Env):
 
 
         info = {}
-        print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
+        #print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
         # print("Action indices:", action)
         return obs, float(reward), done, info
 
@@ -164,7 +173,8 @@ def run_inference(mm, model_path, deterministic=False):
     print("Loaded model:", model_path)
     try:
         while True:
-            obs = np.array(read_slots(mm, *slots_config['ray_distances']) +
+            obs = np.array(read_slots(mm, *slots_config['Wall_distances']) +
+                           read_slots(mm, *slots_config['ray_distances']) +
                            read_slots(mm, *slots_config['ray_hits']) +
                            [read_slots(mm, *slots_config['speed'])[0]], dtype=np.float32)
             # reshaped to (n,) or (1, n) depending on model expectations
