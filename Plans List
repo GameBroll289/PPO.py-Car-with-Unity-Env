@@ -2,4 +2,4 @@ Set Eval according to eipsodes.
 
 Figure out the clipped advantage and fine tune it
 
-Add another raycasting layer so that AI aint blind cause of goals in the way
+Make the env reset after a set amount of time
