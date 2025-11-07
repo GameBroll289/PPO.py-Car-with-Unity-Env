@@ -88,7 +88,7 @@ public class Car : MonoBehaviour
     }
     private IEnumerator Done()
     {
-        yield return new WaitForSeconds(0.04f);
+        yield return new WaitForSeconds(0.2f);
         done = 0;
     }
     
