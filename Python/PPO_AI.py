@@ -8,21 +8,12 @@ unity_sb3_runner.py
     * infer  : loads a saved SB3 model and runs policy, writing actions to Unity
     * train  : wraps the Unity memory as a Gym Env and runs SB3.PPO.learn(...)
 """
-
-import argparse
 import time
 import numpy as np
 import mmap
 import struct
 import os
 
-# Stable Baselines3
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-import gym
-from gym import spaces
-
-# ------------------------
 # Shared-memory configuration (match your Unity layout)
 # ------------------------
 slots_config = {
@@ -34,6 +25,8 @@ slots_config = {
     'speed': (20, 21),          # slot 20: current speed (read-only)
     'Wall_distances': (21, 29)   # slots 0-7
 }
+
+#25 OBS
 slot_count = 29
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
@@ -42,7 +35,7 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode
+global Episode, step_wait, episode_steps
 Episode=0
 
 # -------------------------
@@ -67,44 +60,14 @@ def write_slots(mm, start, end, values):
     mm.flush()
 
 # -------------------------
-# Simple Gym Env wrapper using shared memory
-# -------------------------
-class UnityRAMEnv(gym.Env):
-    """
-    Minimal Gym wrapper that interacts with Unity via shared memory.
+    def Start(mm):
+        episode_steps = 0
 
-    Observation:
-        - wall_distances (8)
-        - ray_distances (8)
-        - ray_hits (8)
-        - current_speed (1)
-        => total obs shape = (25,)
-    Action:
-        MultiDiscrete([3,3])  # speed_idx, steer_idx
-    Step semantics:
-        - write action into slots_config['actions']
-        - sleep for step_wait seconds (allow Unity to simulate)
-        - read new obs/reward/done
-    NOTE: Depending on your Unity setup you may need to adapt reset() and step() logic.
-    """
-    def __init__(self, mm, step_wait=0.04):
-        super().__init__()
-        self.mm = mm
-        self.step_wait = step_wait
-        self.episode_steps = 0
-
-        # action and observation spaces
-        self.action_space = spaces.MultiDiscrete([3, 3])
-        # bounds: rays probably >=0; use wide bounds to be safe
-        low = np.array([-1000.0] * 25, dtype=np.float32)
-        high = np.array([1000.0] * 25, dtype=np.float32)
-        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
-
-    def _read_obs(self):
-        Hitrays = read_slots(self.mm, *slots_config['ray_distances'])      # 8 floats
-        Wallrays = read_slots(self.mm, *slots_config['Wall_distances'])      # 8 floats
-        hits = read_slots(self.mm, *slots_config['ray_hits'])          # 8 floats
-        speed = read_slots(self.mm, *slots_config['speed'])[0]         # 1 float
+    def Read_obs():
+        Hitrays = read_slots(mm, *slots_config['ray_distances'])      # 8 floats
+        Wallrays = read_slots(mm, *slots_config['Wall_distances'])      # 8 floats
+        hits = read_slots(mm, *slots_config['ray_hits'])          # 8 floats
+        speed = read_slots(mm, *slots_config['speed'])[0]         # 1 float
         obs = np.array(list(Wallrays) + list(Hitrays) + list(hits) + [speed], dtype=np.float32)
         
             # Sanity checks: replace any NaN/Inf with a safe fallback
@@ -114,20 +77,19 @@ class UnityRAMEnv(gym.Env):
 
         return obs
 
-    def reset(self):
+    def reset():
         # Optionally: write neutral actions and wait a short bit
-        write_slots(self.mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
-        time.sleep(self.step_wait)
-        self.episode_steps = 0
-        obs = self._read_obs()
+        write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
+        time.sleep(step_wait)
+        episode_steps = 0
+        obs = Read_obs()
         return obs
 
-    def step(self, action):
+    def step(action):
         """
         action: array-like of two ints (0..2)
         """
-        self.episode_steps += 1
-        
+        episode_steps += 1
 
         speed_idx = int(action[0])
         steer_idx = int(action[1])
@@ -135,26 +97,24 @@ class UnityRAMEnv(gym.Env):
         steer_cmd = INDEX_TO_CMD[steer_idx]
 
         # Write actions
-        write_slots(self.mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
+        write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
 
         # Allow Unity to step forward
-        time.sleep(self.step_wait)
+        time.sleep(step_wait)
 
         # Read obs/reward/done
-        obs = self._read_obs()
-        reward = read_slots(self.mm, *slots_config['reward'])[0]
-        done = bool(read_slots(self.mm, *slots_config['done'])[0])
+        obs = Read_obs()
+        reward = read_slots(mm, *slots_config['reward'])[0]
+        done = bool(read_slots(mm, *slots_config['done'])[0])
         if done:
             global Episode
             Episode+=1
             print("Episode: ", Episode)
 
-
         info = {}
         #print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
         # print("Action indices:", action)
         return obs, float(reward), done, info
-
 
 # -------------------------
 # Inference loop: load model & run
@@ -201,30 +161,12 @@ def run_inference(mm, model_path, deterministic=False):
 # -------------------------
 # Training helper: train PPO with Unity env
 # -------------------------
-def train_model(mm, model_path, step_wait=0.04):
-    def make_env():
-        return UnityRAMEnv(mm, step_wait=step_wait)
+def train_model(mm, model_path):
 
-    venv = DummyVecEnv([make_env])
-    model = PPO("MlpPolicy", venv, verbose=2, policy_kwargs=dict(net_arch=[256, 256]))
-
-    from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
-
-    stop_callback = StopTrainingOnNoModelImprovement(
-        max_no_improvement_evals=8,
-        min_evals=5,
-        verbose=2
-    )
-    eval_callback = EvalCallback(
-        eval_env=venv,
-        best_model_save_path='./best_model/',
-        log_path='./logs/',
-        eval_freq=5000,
-        callback_after_eval=stop_callback
-    )
+    #Make Model
 
     print("Starting adaptive training...")
-    model.learn(total_timesteps=int(1e10), callback=eval_callback)
+    model.fit()
     model.save(model_path)
     print("Training complete. Best model saved.")
 
@@ -232,8 +174,6 @@ def train_model(mm, model_path, step_wait=0.04):
 # CLI entrypoint
 # -------------------------
 def main():
-    import os
-
     # Relative model path
     script_dir = os.path.dirname(os.path.abspath(__file__))
     model_path = os.path.join(script_dir, "car_agent")
@@ -246,8 +186,6 @@ def main():
         mode = "infer"
     deterministic = True
     stepwait = 0.04
-    timesteps = 10000#20000
-
     # open mmap
     mm = open_mmap()
 
