@@ -5,7 +5,7 @@ unity_sb3_runner.py
 - Uses a shared memory layout (unity_ram) to talk with Unity.
 - Action space: MultiDiscrete([3,3])  -> indices {0,1,2} mapped to [-1,0,1]
 - Two primary modes:
-    * infer  : loads a saved SB3 model and runs policy, writing actions to Unity
+    * infer  : loads a saved SB3 actor and runs policy, writing actions to Unity
     * train  : wraps the Unity memory as a Gym Env and runs SB3.PPO.learn(...)
 """
 import time
@@ -14,6 +14,10 @@ import mmap
 import struct
 import os
 
+import tensorflow as tf
+import tensorflow_probability as tfp
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
 # Shared-memory configuration (match your Unity layout)
 # ------------------------
 slots_config = {
@@ -35,9 +39,15 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, step_wait, episode_steps
+global Episode, Episodes_Per_Batch, step_wait, episode_steps
+Episodes_Per_Batch=3
 Episode=0
+episode_steps=0
 
+#Hyper parameters
+gamma=0.99 #How much later rewards are worth, Goes from 0.95 to 0.99
+gae_lambda=0.95
+entropy_coefficient=0.01
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -60,9 +70,6 @@ def write_slots(mm, start, end, values):
     mm.flush()
 
 # -------------------------
-def Start(mm):
-    episode_steps = 0
-
 def Read_obs():
     Hitrays = read_slots(mm, *slots_config['ray_distances'])      # 8 floats
     Wallrays = read_slots(mm, *slots_config['Wall_distances'])      # 8 floats
@@ -82,14 +89,20 @@ def reset():
     write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
     time.sleep(step_wait)
     episode_steps = 0
-    obs = Read_obs()
-    return obs
 
-def step(action):
+def step():
     """
     action: array-like of two ints (0..2)
     """
     episode_steps += 1
+    action=actor.pridict()
+    value=critic.pridict()
+
+    tfd=tfp.distributions
+    dist=tfd.Catagorical(logits=action)
+    action=dist.sample() #Action in 0,1,2
+    log_prob=dist.log_prob(action)
+    dist=tf.distribute.cax
 
     speed_idx = int(action[0])
     steer_idx = int(action[1])
@@ -106,40 +119,46 @@ def step(action):
     obs = Read_obs()
     reward = read_slots(mm, *slots_config['reward'])[0]
     done = bool(read_slots(mm, *slots_config['done'])[0])
+    trajectories(obs, action, log_prob,reward, done, value)
+
     if done:
-        global Episode
-        Episode+=1
-        print("Episode: ", Episode)
+        print(f"Episode {Episode} ended after {episode_steps} steps.")
 
-    info = {}
-    #print(f"Step: {self.episode_steps} | Speed cmd: {speed_cmd}, Steer cmd: {steer_cmd} | Reward: {reward:.3f} | Done: {done}")
-    # print("Action indices:", action)
-    return obs, float(reward), done, info
+    return obs, float(reward), done
 
+def trajectories(obs, action, log_prob, reward, done, value):
+    all_obs.append(obs)
+    all_actions.append(action)
+    all_log_probs.append(log_prob)
+    all_rewards.append(reward)
+    all_dones.append(done)
+    all_values.append(value)
+    
+    
 # -------------------------
-# Inference loop: load model & run
+# Inference loop: load actor & run
 # -------------------------
 def load_model(mm, model_path):
     """
-    Continuously read obs, call model.predict, and write actions to Unity.
+    Continuously read obs, call actor.predict, and write actions to Unity.
     - deterministic: whether to use deterministic policy (True) or stochastic (False)
     - sleep_between_steps: small sleep to avoid 100% busy loop (seconds)
     """
     # Build a dummy observation of the correct shape for predict call
     # Model was trained with obs shape (17,)
     # We read obs directly from the map.
-    model = load(model_path)
+    actor = load(model_path)
 
-    print("Loaded model:", model_path)
+    print("Loaded actor:", model_path)
     try:
         while True:
             obs = np.array(read_slots(mm, *slots_config['Wall_distances']) +
                            read_slots(mm, *slots_config['ray_distances']) +
                            read_slots(mm, *slots_config['ray_hits']) +
                            [read_slots(mm, *slots_config['speed'])[0]], dtype=np.float32)
-            # reshaped to (n,) or (1, n) depending on model expectations
+            # reshaped to (n,) or (1, n) depending on actor expectations
             # SB3 accepts 1D obs
-            action, _states = model.predict(obs)
+            action, _states = actor.predict(obs)
             # action should be array-like [speed_idx, steer_idx]
             speed_idx = int(action[0])
             steer_idx = int(action[1])
@@ -162,14 +181,54 @@ def load_model(mm, model_path):
 def train_model(mm, model_path):
 
     #Make Model
+    actor=Sequential{[
+        Dense(25,input_shape=(25)),
+        Dense(128, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(3, activation='softmax')
+    ]}
+
+    critic=Sequential([
+        Dense(25, input_shape=(25)),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(1)
+    ])
+    
 
     print("Starting adaptive training...")
-    model.fit()
-    model.save(model_path)
-    print("Training complete. Best model saved.")
+
+    Episode=0
+
+    global all_obs, all_actions, all_log_probs, all_rewards, all_dones, all_values, all_rtg
+    all_obs=[]
+    all_actions=[]
+    all_log_probs=[]
+    all_rewards=[]
+    all_dones=[]
+    all_values=[]
+    
+    while True:
+        reset()#probably wrong untill updating
+        obs,reward,done=step()
+        
+        if Episode % Episodes_Per_Batch==0:
+            reset()
+            print("Updating")
+            all_rewards_tf=tf.stack(all_rewards,axis=0)
+            all_values_tf=tf.stack(all_values,axis=0)
+            all_dones_tf=tf.cast(tf.stack(all_dones,axis=0),tf.float32)
+
+            T=tf.shape(all_rewards_tf)[0]
+
+
+
+
+        
+    print("Training complete. Best actor saved.")
 # -------------------------
 def main():
-    # Relative model path
+    # Relative actor path
     script_dir = os.path.dirname(os.path.abspath(__file__))
     model_path = os.path.join(script_dir, "car_agent")
 
