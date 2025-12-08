@@ -39,10 +39,13 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps
+global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE
 Episodes_Per_Batch=3
 Episode=0
 episode_steps=0
+Epochs=4
+MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
+
 
 #Hyper parameters
 gamma=0.99 #How much later rewards are worth, Goes from 0.95 to 0.99
@@ -90,13 +93,11 @@ def reset():
     time.sleep(step_wait)
     episode_steps = 0
 
-def step():
+def step(action,value):
     """
     action: array-like of two ints (0..2)
     """
     episode_steps += 1
-    action=actor.pridict()
-    value=critic.pridict()
 
     tfd=tfp.distributions
     dist=tfd.Catagorical(logits=action)
@@ -208,23 +209,106 @@ def train_model(mm, model_path):
     all_dones=[]
     all_values=[]
     
+    reset()
     while True:
-        reset()#probably wrong untill updating
-        obs,reward,done=step()
-        
         if Episode % Episodes_Per_Batch==0:
             reset()
             print("Updating")
+            all_obs_tf=tf.stack(all_obs,axis=0)
+            all_actions_tf=tf.stack(all_actions,axis=0)
+            all_log_probs_tf=tf.stack(all_log_probs,axis=0)
             all_rewards_tf=tf.stack(all_rewards,axis=0)
-            all_values_tf=tf.stack(all_values,axis=0)
             all_dones_tf=tf.cast(tf.stack(all_dones,axis=0),tf.float32)
+            all_values_tf=tf.stack(all_values,axis=0)
 
-            T=tf.shape(all_rewards_tf)[0]
-
-
-
+            # Get the total number of steps collected (T)
+            T = tf.shape(all_rewards_tf)[0]
+            print("The number of steps: ", T, "\nWith batches: ", T % MINI_BATCH_SIZE)
 
         
+            # Get Bootstrapping Value ---
+            # We need the value for the state that the batch ended on (current_obs)
+            # Assuming 'current_obs' is the observation from the final step's 'step()' call
+            final_obs_tf = tf.convert_to_tensor(current_obs[None, :], dtype=tf.float32)
+            next_value = critic(final_obs_tf)[0, 0] # Get the single scalar value
+
+            # --- GAE Backward Sweep ---
+
+            advantages = tf.TensorArray(dtype=tf.float32, size=T, dynamic_size=False)
+            lastgaelam = tf.constant(0.0, dtype=tf.float32)
+
+            # Note: Using a standard Python loop for reversed iteration is often simpler
+            # and acceptable when operating on pre-collected data outside a core tf.function graph.
+            for t in reversed(range(T.numpy())):
+                
+                # Check if this is the last collected step
+                if t == T.numpy() - 1:
+                    # Logic for the last step (bootstrapping)
+                    # We need the 'next_done' flag that came with the final observation
+                    # Assuming 'next_done' (boolean or float 0/1) is available after the last step() call.
+                    
+                    # nextnonterminal = 1.0 - next_done 
+                    # (Assuming next_done is the flag associated with the state *after* the final obs in the batch)
+                    nextnonterminal = 1.0 - (1.0 if done else 0.0) # Using 'done' flag from the last step() call
+                    nextvalues = next_value
+                else:
+                    # Logic for all other steps
+                    nextnonterminal = 1.0 - all_dones_tf[t + 1]
+                    nextvalues = all_values_tf[t + 1]
+
+                # TD Error (Delta)
+                delta = all_rewards_tf[t] + gamma * nextvalues * nextnonterminal - all_values_tf[t]
+                
+                # GAE Recursive Update
+                current_advantage = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
+                
+                # Store and update lastgaelam for the next iteration
+                advantages = advantages.write(t, current_advantage)
+                lastgaelam = current_advantage
+
+            advantages_tf = advantages.stack()
+            returns_tf = advantages_tf + all_values_tf
+
+
+            # ----------------------------------------------------
+            # STEP 1: Zip the input Tensors into a single Dataset
+            # ----------------------------------------------------
+            # This packages all trajectories data together for simultaneous processing
+            ppo_dataset = tf.data.Dataset.from_tensor_slices((
+                tf.stack(all_obs),      # Your current observations
+                tf.stack(all_actions),  # Actions taken
+                returns_tf,             # The calculated Returns-to-Go
+                advantages_tf,          # The calculated Advantages
+                tf.stack(all_log_probs) # The old log probabilities
+            ))
+
+            # ----------------------------------------------------
+            # STEP 2: Shuffle, Batch, and Pre-fetch the Dataset
+            # ----------------------------------------------------
+            ppo_dataset = ppo_dataset.shuffle(
+                # Set buffer_size = T to ensure maximum randomness (shuffle the entire batch)
+                buffer_size=T, 
+                reshuffle_each_iteration=True # Important for PPO: ensures a new shuffle for each Epoch
+            )
+            ppo_dataset = ppo_dataset.batch(MINI_BATCH_SIZE)
+            ppo_dataset = ppo_dataset.prefetch(tf.data.AUTOTUNE) # Optimization: loads next batch while current batch is being processed
+
+            # ----------------------------------------------------
+            # STEP 3: Run the PPO Epochs
+            # ----------------------------------------------------
+            for epoch in range(Epochs): # Your current Epochs=4
+                print("Epoch: ", epoch)
+                # Each 'mini_batch' contains (m_obs, m_actions, m_returns, m_advantages, m_old_log_probs)
+                for mini_batch in ppo_dataset:
+                    
+                    # Unpack the mini-batch data
+                    m_obs, m_actions, m_returns, m_advantages, m_old_log_probs = mini_batch
+                    
+                    # PPO Optimization: This is where you calculate PPO loss, 
+                    # value loss, and apply gradients using these mini-batches.
+                    # ...
+        step(actor.pridict, critic.pridict)
+                    
     print("Training complete. Best actor saved.")
 # -------------------------
 def main():
