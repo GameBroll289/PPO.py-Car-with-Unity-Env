@@ -71,7 +71,6 @@ def write_slots(mm, start, end, values):
     for v in values:
         mm.write(struct.pack('<f', float(v)))
     mm.flush()
-
 # -------------------------
 def Read_obs():
     Hitrays = read_slots(mm, *slots_config['ray_distances'])      # 8 floats
@@ -296,17 +295,72 @@ def train_model(mm, model_path):
             # ----------------------------------------------------
             # STEP 3: Run the PPO Epochs
             # ----------------------------------------------------
-            for epoch in range(Epochs): # Your current Epochs=4
-                print("Epoch: ", epoch)
-                # Each 'mini_batch' contains (m_obs, m_actions, m_returns, m_advantages, m_old_log_probs)
+            for epoch in range(Epochs):
+                print(f"  Epoch {epoch+1}/{Epochs}")
+                
                 for mini_batch in ppo_dataset:
-                    
-                    # Unpack the mini-batch data
                     m_obs, m_actions, m_returns, m_advantages, m_old_log_probs = mini_batch
                     
-                    # PPO Optimization: This is where you calculate PPO loss, 
-                    # value loss, and apply gradients using these mini-batches.
-                    # ...
+                    # Open a GradientTape to record operations for Automatic Differentiation
+                    with tf.GradientTape(persistent=True) as tape:
+                        # 1. Get CURRENT predictions
+                        current_logits = actor(m_obs, training=True) # Shape: (batch, 6)
+                        current_values = critic(m_obs, training=True)
+                        
+                        # 2. Split logits for Speed (0-2) and Steering (3-5)
+                        speed_logits, steer_logits = tf.split(current_logits, num_or_size_splits=2, axis=1)
+                        
+                        # 3. Create Distributions
+                        speed_dist = tfp.distributions.Categorical(logits=speed_logits)
+                        steer_dist = tfp.distributions.Categorical(logits=steer_logits)
+                        
+                        # 4. Calculate New Log Probs for the actions we took
+                        # m_actions column 0 is speed, column 1 is steer
+                        new_log_probs_speed = speed_dist.log_prob(m_actions[:, 0])
+                        new_log_probs_steer = steer_dist.log_prob(m_actions[:, 1])
+                        
+                        # Total Log Prob = Sum of independent log probs
+                        new_log_probs = new_log_probs_speed + new_log_probs_steer
+                        
+                        # 5. Calculate Ratio
+                        # ratio = exp(new_log - old_log)
+                        log_ratio = new_log_probs - m_old_log_probs
+                        ratio = tf.exp(log_ratio)
+                        
+                        # 6. PPO CLIP LOSS (The famous formula)
+                        surr1 = ratio * m_advantages
+                        surr2 = tf.clip_by_value(ratio, 1.0 - clip_ratio, 1.0 + clip_ratio) * m_advantages
+                        policy_loss = -tf.reduce_mean(tf.minimum(surr1, surr2))
+                        
+                        # 7. VALUE LOSS (MSE)
+                        # We want the critic to predict the Returns (Real Reward + Future Reward)
+                        value_loss = tf.reduce_mean(tf.square(m_returns - tf.squeeze(current_values)))
+                        
+                        # 8. ENTROPY BONUS (To encourage exploration)
+                        entropy = tf.reduce_mean(speed_dist.entropy() + steer_dist.entropy())
+                        
+                        # Total Loss
+                        total_actor_loss = policy_loss - (entropy_coefficient * entropy)
+                        total_critic_loss = value_loss
+
+                    # 9. APPLY GRADIENTS
+                    # Calculate Actor Gradients
+                    actor_grads = tape.gradient(total_actor_loss, actor.trainable_variables)
+                    actor_optimizer.apply_gradients(zip(actor_grads, actor.trainable_variables))
+                    
+                    # Calculate Critic Gradients
+                    critic_grads = tape.gradient(total_critic_loss, critic.trainable_variables)
+                    critic_optimizer.apply_gradients(zip(critic_grads, critic.trainable_variables))
+                    
+                    del tape # Free up memory
+            
+            # Clear buffers for next batch
+            all_obs.clear()
+            all_actions.clear()
+            all_log_probs.clear()
+            all_rewards.clear()
+            all_dones.clear()
+            all_values.clear()
         step(actor.pridict, critic.pridict)
                     
     print("Training complete. Best actor saved.")
