@@ -48,7 +48,7 @@ MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 
 
 #Hyper parameters
-gamma=0.99 #How much later rewards are worth, Goes from 0.95 to 0.99
+gamma=0.997 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
 gae_lambda=0.95
 entropy_coefficient=0.01
 # -------------------------
@@ -87,26 +87,37 @@ def Read_obs():
     return obs
 
 def reset():
+    global Episode, episode_steps
     # Optionally: write neutral actions and wait a short bit
     write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
     time.sleep(step_wait)
     episode_steps = 0
+    Episode += 1
+    print(f"Starting Episode: {Episode}")
 
-def step(action,value):
-    """
-    action: array-like of two ints (0..2)
-    """
-    global episode_steps
+def step(action_logits,value):
+    global episode_steps, Episode
     episode_steps += 1
-
-    tfd=tfp.distributions
-    dist=tfd.Categorical(logits=action)
-    action=dist.sample() #Action in 0,1,2
-    log_prob=dist.log_prob(action)
-    #dist=tf.distribute.cax
-
-    speed_idx = int(action[0])
-    steer_idx = int(action[1])
+    
+    # 1. Split the 6 logits into Speed (3) and Steer (3)
+    speed_logits, steer_logits = tf.split(action_logits, num_or_size_splits=2, axis=0)
+    
+    # 2. Create distributions and sample INDEPENDENTLY
+    speed_dist = tfp.distributions.Categorical(logits=speed_logits)
+    steer_dist = tfp.distributions.Categorical(logits=steer_logits)
+    
+    speed_action = speed_dist.sample()
+    steer_action = steer_dist.sample()
+    
+    # 3. Get Log Probs (We need both!)
+    speed_log = speed_dist.log_prob(speed_action)
+    steer_log = steer_dist.log_prob(steer_action)
+    total_log_prob = speed_log + steer_log
+    
+    # 4. Convert to Python integers for the mmap
+    speed_idx = int(speed_action)
+    steer_idx = int(steer_action)
+    
     speed_cmd = INDEX_TO_CMD[speed_idx]
     steer_cmd = INDEX_TO_CMD[steer_idx]
 
@@ -120,7 +131,11 @@ def step(action,value):
     obs = Read_obs()
     reward = read_slots(mm, *slots_config['reward'])[0]
     done = bool(read_slots(mm, *slots_config['done'])[0])
-    trajectories(obs, action, log_prob,reward, done, value)
+    
+    # Save the combined action [speed, steer] for the training buffer
+    final_action_indices = [speed_idx, steer_idx]
+    
+    trajectories(obs, final_action_indices, total_log_prob, reward, done, value)
 
     if done:
         print(f"Episode {Episode} ended after {episode_steps} steps.")
@@ -180,6 +195,7 @@ def load_model(mm, model_path):
 
 # -------------------------
 def train_model(mm, model_path):
+    global Episode
     globals()['mm'] = mm
     globals()['step_wait'] = 0.04
     # Create Optimizers
@@ -294,7 +310,7 @@ def train_model(mm, model_path):
             # ----------------------------------------------------
             ppo_dataset = ppo_dataset.shuffle(
                 # Set buffer_size = T to ensure maximum randomness (shuffle the entire batch)
-                buffer_size=T, 
+                buffer_size=tf.cast(T, tf.int64), 
                 reshuffle_each_iteration=True # Important for PPO: ensures a new shuffle for each Epoch
             )
             ppo_dataset = ppo_dataset.batch(MINI_BATCH_SIZE)
