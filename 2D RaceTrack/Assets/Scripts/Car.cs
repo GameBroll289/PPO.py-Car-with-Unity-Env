@@ -5,6 +5,7 @@ using UnityEngine;
 public class Car : MonoBehaviour
 {
     public static float Time_Rimaining = 10f;
+    public static float Time_Rimaining = 10f;
     public static int score = 0;
     public static int done = 0;
     private bool canGiveReward = true;
@@ -48,7 +49,9 @@ public class Car : MonoBehaviour
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
             CarRaycastSensor2D.reward = -25f;
+            CarRaycastSensor2D.reward = -25f;
             done = 1;
+            Time_Rimaining = 10f; // Reset time remaining
             Time_Rimaining = 10f; // Reset time remaining
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
@@ -66,6 +69,7 @@ public class Car : MonoBehaviour
                 if (canGiveReward)
                 {
                     CarRaycastSensor2D.reward = 10f+(score*score);
+                    Time_Rimaining += 5f;
                     Time_Rimaining += 5f;
                     StartCoroutine(GiveReward());
                 }
