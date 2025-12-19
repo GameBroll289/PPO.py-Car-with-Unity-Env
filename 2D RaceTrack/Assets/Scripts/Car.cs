@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class Car : MonoBehaviour
 {
+    public static float Time_Rimaining = 10f;
     public static int score = 0;
     public static int done = 0;
     private bool canGiveReward = true;
@@ -22,7 +23,20 @@ public class Car : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        Time_Rimaining -= Time.deltaTime;
+        Debug.Log($"Time Remaining: {Time_Rimaining}");
+        if (Time_Rimaining <= 0f)
+        {
+            transform.position = new Vector2(-9.24f, -0.48f); // Reset position on time out
+            rb.linearVelocity = Vector2.zero;
+            transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
+            score = 0;
+            CarRaycastSensor2D.reward = -80f;
+            done = 1;
+            StartCoroutine(GiveReward());
+            StartCoroutine(Done());
+            Time_Rimaining = 10f; // Reset time remaining
+        }
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
@@ -33,8 +47,9 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
-            CarRaycastSensor2D.reward = -20f;
+            CarRaycastSensor2D.reward = -25f;
             done = 1;
+            Time_Rimaining = 10f; // Reset time remaining
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
         }
@@ -51,6 +66,7 @@ public class Car : MonoBehaviour
                 if (canGiveReward)
                 {
                     CarRaycastSensor2D.reward = 10f+(score*score);
+                    Time_Rimaining += 5f;
                     StartCoroutine(GiveReward());
                 }
             }

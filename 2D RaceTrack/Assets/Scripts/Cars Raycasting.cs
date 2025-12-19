@@ -7,6 +7,7 @@ using JetBrains.Annotations;
 
 public class CarRaycastSensor2D : MonoBehaviour
 {
+    public float StartingTime = 10f;
     public static float speed;
     public static float reward = -0.8f;
     public float rayLength = 10f;
@@ -37,7 +38,7 @@ public class CarRaycastSensor2D : MonoBehaviour
     };
     // Memory Mapped File variables
     const string memoryName = "unity_ram";
-    const int slotCount = 29;   // must match Python
+    const int slotCount = 30;   // must match Python
     const int slotSize = 4;     // float32
     const int totalSize = slotCount * slotSize;
 
@@ -113,6 +114,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         WriteFloat(17, Car.done);
         WriteFloat(20, (speed)); // Speed normalized
         WriteFloats(21, WallDistances);
+        WriteFloat(28, Car.Time_Rimaining/StartingTime); // Placeholder
         accessor.Flush();
 
         // Read actions back from Python
