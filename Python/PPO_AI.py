@@ -39,7 +39,7 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE
+global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm
 Episodes_Per_Batch=3
 Episode=0
 episode_steps=0
@@ -96,13 +96,14 @@ def step(action,value):
     """
     action: array-like of two ints (0..2)
     """
+    global episode_steps
     episode_steps += 1
 
     tfd=tfp.distributions
-    dist=tfd.Catagorical(logits=action)
+    dist=tfd.Categorical(logits=action)
     action=dist.sample() #Action in 0,1,2
     log_prob=dist.log_prob(action)
-    dist=tf.distribute.cax
+    #dist=tf.distribute.cax
 
     speed_idx = int(action[0])
     steer_idx = int(action[1])
@@ -147,7 +148,7 @@ def load_model(mm, model_path):
     # Build a dummy observation of the correct shape for predict call
     # Model was trained with obs shape (17,)
     # We read obs directly from the map.
-    actor = load(model_path)
+    actor = tf.keras.models.load_model(model_path)
 
     print("Loaded actor:", model_path)
     try:
@@ -179,18 +180,24 @@ def load_model(mm, model_path):
 
 # -------------------------
 def train_model(mm, model_path):
+    globals()['mm'] = mm
+    globals()['step_wait'] = 0.04
+    # Create Optimizers
+    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=3e-4)
+    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+    clip_ratio = 0.2
 
-    #Make Model
-    actor=Sequential{[
-        Dense(25,input_shape=(25)),
-        Dense(128, activation='relu'),
+    # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
+    # No 'softmax' here! We want raw logits for PPO stability.
+    actor = Sequential([
+        Dense(64, input_shape=(25,), activation='relu'),
         Dense(64, activation='relu'),
-        Dense(3, activation='softmax')
-    ]}
+        Dense(6)  # [Speed_Logits(3), Steer_Logits(3)]
+    ])
 
-    critic=Sequential([
-        Dense(25, input_shape=(25)),
-        Dense(64, activation='relu'),
+    # CRITIC: Outputs 1 value estimate
+    critic = Sequential([
+        Dense(64, input_shape=(25,), activation='relu'),
         Dense(64, activation='relu'),
         Dense(1)
     ])
@@ -209,8 +216,9 @@ def train_model(mm, model_path):
     all_values=[]
     
     reset()
+    current_obs = Read_obs()
     while True:
-        if Episode % Episodes_Per_Batch==0:
+        if Episode > 0 and Episode % Episodes_Per_Batch==0:
             reset()
             print("Updating")
             all_obs_tf=tf.stack(all_obs,axis=0)
@@ -307,7 +315,7 @@ def train_model(mm, model_path):
                         current_logits = actor(m_obs, training=True) # Shape: (batch, 6)
                         current_values = critic(m_obs, training=True)
                         
-                        # 2. Split logits for Speed (0-2) and Steering (3-5)
+                        # 2. Split logits for Speed (0-2) and Steering (3-5)d
                         speed_logits, steer_logits = tf.split(current_logits, num_or_size_splits=2, axis=1)
                         
                         # 3. Create Distributions
@@ -361,7 +369,27 @@ def train_model(mm, model_path):
             all_rewards.clear()
             all_dones.clear()
             all_values.clear()
-        step(actor.pridict, critic.pridict)
+        # ----------------------------------------------------
+        # STEP 4: Collect Data (The Fix)
+        # ----------------------------------------------------
+        # 1. Prepare the input: Add batch dimension (25,) -> (1, 25)
+        obs_tensor = tf.convert_to_tensor(current_obs[None, :], dtype=tf.float32)
+        
+        # 2. Run the networks
+        logits = actor(obs_tensor)  # Get raw action scores
+        value = critic(obs_tensor)  # Get value estimate
+        
+        # 3. Step the environment
+        # We use [0] to remove the batch dimension, passing just the data
+        new_obs, reward, done = step(logits[0], value[0])
+        
+        # 4. Update state for next loop
+        current_obs = new_obs
+        
+        if done:
+            Episode += 1
+            reset()
+            current_obs = Read_obs() # Get fresh observation for new episode
                     
     print("Training complete. Best actor saved.")
 # -------------------------
@@ -383,7 +411,7 @@ def main():
     if mode == "load":
         load_model(mm, model_path)
     elif mode == "train":
-        train_model(mm, model_path, step_wait=stepwait)
+        train_model(mm, model_path)
 
     mm.close()
 
