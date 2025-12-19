@@ -40,7 +40,7 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
 global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm
-Episodes_Per_Batch=3
+Episodes_Per_Batch=4
 Episode=0
 episode_steps=0
 Epochs=4
@@ -92,7 +92,6 @@ def reset():
     write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
     time.sleep(step_wait)
     episode_steps = 0
-    Episode += 1
     print(f"Starting Episode: {Episode}")
 
 def step(action_logits,value):
@@ -199,21 +198,23 @@ def train_model(mm, model_path):
     globals()['mm'] = mm
     globals()['step_wait'] = 0.04
     # Create Optimizers
-    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=3e-4)
-    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=5e-3)
+    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-3)
     clip_ratio = 0.2
 
     # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
     # No 'softmax' here! We want raw logits for PPO stability.
     actor = Sequential([
-        Dense(64, input_shape=(25,), activation='relu'),
+        tf.keras.layers.Input(shape=(25,)),
+        Dense(64, activation='relu'),
         Dense(64, activation='relu'),
         Dense(6)  # [Speed_Logits(3), Steer_Logits(3)]
     ])
 
     # CRITIC: Outputs 1 value estimate
     critic = Sequential([
-        Dense(64, input_shape=(25,), activation='relu'),
+        tf.keras.layers.Input(shape=(25,)),
+        Dense(64, activation='relu'),
         Dense(64, activation='relu'),
         Dense(1)
     ])
@@ -221,7 +222,8 @@ def train_model(mm, model_path):
 
     print("Starting adaptive training...")
 
-    Episode=0
+    Episode=1
+    Loop=1
 
     global all_obs, all_actions, all_log_probs, all_rewards, all_dones, all_values, all_rtg
     all_obs=[]
@@ -385,6 +387,11 @@ def train_model(mm, model_path):
             all_rewards.clear()
             all_dones.clear()
             all_values.clear()
+            print(f"Completed PPO update after {Episode} Episodes. In Loop {Loop}.")
+            Episode=1
+            Loop+=1
+            reset()
+            
         # ----------------------------------------------------
         # STEP 4: Collect Data (The Fix)
         # ----------------------------------------------------
@@ -403,6 +410,7 @@ def train_model(mm, model_path):
         current_obs = new_obs
         
         if done:
+            print(f"Episode {Episode} finished. Resetting environment.")
             Episode += 1
             reset()
             current_obs = Read_obs() # Get fresh observation for new episode
