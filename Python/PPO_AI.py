@@ -27,11 +27,12 @@ slots_config = {
     'done': (17, 18),          # slot 17
     'actions': (18, 20),       # slots 18-19: speed, steering (write)
     'speed': (20, 21),          # slot 20: current speed (read-only)
-    'Wall_distances': (21, 29)   # slots 0-7
+    'Wall_distances': (21, 29),   # slots 21-28
+    'Time_Remaining': (28, 29)   # slot 28-29
 }
 
 #25 OBS
-slot_count = 29
+slot_count = 30
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
 TAGNAME = 'unity_ram'  # mmap tag used by Unity too
@@ -77,7 +78,8 @@ def Read_obs():
     Wallrays = read_slots(mm, *slots_config['Wall_distances'])      # 8 floats
     hits = read_slots(mm, *slots_config['ray_hits'])          # 8 floats
     speed = read_slots(mm, *slots_config['speed'])[0]         # 1 float
-    obs = np.array(list(Wallrays) + list(Hitrays) + list(hits) + [speed], dtype=np.float32)
+    Time_Remaining = read_slots(mm, *slots_config['Time_Remaining'])[0]  # 1 float
+    obs = np.array(list(Wallrays) + list(Hitrays) + list(hits) + [speed] + [Time_Remaining], dtype=np.float32)
     
         # Sanity checks: replace any NaN/Inf with a safe fallback
     if np.isnan(obs).any() or np.isinf(obs).any():
@@ -205,7 +207,7 @@ def train_model(mm, model_path):
     # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
     # No 'softmax' here! We want raw logits for PPO stability.
     actor = Sequential([
-        tf.keras.layers.Input(shape=(25,)),
+        tf.keras.layers.Input(shape=(26,)),
         Dense(64, activation='relu'),
         Dense(64, activation='relu'),
         Dense(6)  # [Speed_Logits(3), Steer_Logits(3)]
@@ -213,7 +215,7 @@ def train_model(mm, model_path):
 
     # CRITIC: Outputs 1 value estimate
     critic = Sequential([
-        tf.keras.layers.Input(shape=(25,)),
+        tf.keras.layers.Input(shape=(26,)),
         Dense(64, activation='relu'),
         Dense(64, activation='relu'),
         Dense(1)
@@ -361,6 +363,9 @@ def train_model(mm, model_path):
                         # 7. VALUE LOSS (MSE)
                         # We want the critic to predict the Returns (Real Reward + Future Reward)
                         value_loss = tf.reduce_mean(tf.square(m_returns - tf.squeeze(current_values)))
+                        # huber = tf.keras.losses.Huber()
+                        # value_loss = huber(m_returns, tf.squeeze(current_values))
+
                         
                         # 8. ENTROPY BONUS (To encourage exploration)
                         entropy = tf.reduce_mean(speed_dist.entropy() + steer_dist.entropy())
