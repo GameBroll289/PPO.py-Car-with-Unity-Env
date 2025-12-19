@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-"""
-unity_sb3_runner.py
-
-- Uses a shared memory layout (unity_ram) to talk with Unity.
-- Action space: MultiDiscrete([3,3])  -> indices {0,1,2} mapped to [-1,0,1]
-- Two primary modes:
-    * infer  : loads a saved SB3 actor and runs policy, writing actions to Unity
-    * train  : wraps the Unity memory as a Gym Env and runs SB3.PPO.learn(...)
-"""
 import time
 import numpy as np
 import mmap
@@ -40,16 +30,16 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm
-Episodes_Per_Batch=4
+global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET
+BATCH_SIZE_TARGET=1200
 Episode=0
 episode_steps=0
-Epochs=4
+Epochs=10
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 
 
 #Hyper parameters
-gamma=0.997 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
+gamma=0.9 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
 gae_lambda=0.95
 entropy_coefficient=0.01
 # -------------------------
@@ -157,42 +147,58 @@ def trajectories(obs, action, log_prob, reward, done, value):
 # -------------------------
 def load_model(mm, model_path):
     """
-    Continuously read obs, call actor.predict, and write actions to Unity.
-    - deterministic: whether to use deterministic policy (True) or stochastic (False)
-    - sleep_between_steps: small sleep to avoid 100% busy loop (seconds)
+    Inference loop: Load raw SavedModel & run.
+    Uses tf.saved_model.load to avoid Keras 3 format errors.
     """
-    # Build a dummy observation of the correct shape for predict call
-    # Model was trained with obs shape (17,)
-    # We read obs directly from the map.
-    actor = tf.keras.models.load_model(model_path)
+    print(f"Loading SavedModel from: {model_path}")
+    
+    # FIX 1: Use low-level loader (Works with Keras 3 and SavedModel folders)
+    imported_model = tf.saved_model.load(model_path)
+    inference_func = imported_model.signatures["serving_default"]
 
-    print("Loaded actor:", model_path)
+    print("Model loaded successfully. Starting inference...")
     try:
         while True:
+            # 1. Read Observations
             obs = np.array(read_slots(mm, *slots_config['Wall_distances']) +
                            read_slots(mm, *slots_config['ray_distances']) +
                            read_slots(mm, *slots_config['ray_hits']) +
-                           [read_slots(mm, *slots_config['speed'])[0]], dtype=np.float32)
-            # reshaped to (n,) or (1, n) depending on actor expectations
-            # SB3 accepts 1D obs
-            action, _states = actor.predict(obs)
-            # action should be array-like [speed_idx, steer_idx]
-            speed_idx = int(action[0])
-            steer_idx = int(action[1])
+                           [read_slots(mm, *slots_config['speed'])[0]] + 
+                           [read_slots(mm, *slots_config['Time_Remaining'])[0]], dtype=np.float32) # Added Time_Remaining
+            
+            # 2. Prepare Input Tensor (Add batch dimension: Shape (1, 26))
+            input_tensor = tf.constant(obs[None, :], dtype=tf.float32)
+
+            # 3. Run Prediction
+            # Output is a dictionary, we grab the first tensor (the logits)
+            predictions = inference_func(input_tensor)
+            logits = list(predictions.values())[0] # Shape (1, 6)
+            
+            # FIX 2: Convert Logits to Action Indices
+            # The model outputs 6 raw numbers. We must split them and find the highest one.
+            speed_logits = logits[0, :3] # First 3 numbers
+            steer_logits = logits[0, 3:] # Last 3 numbers
+            
+            # Use argmax to pick the best action (Deterministic/Greedy)
+            speed_idx = int(tf.argmax(speed_logits))
+            steer_idx = int(tf.argmax(steer_logits))
+
+            # 4. Convert Index to Command (-1, 0, 1)
             speed_cmd = INDEX_TO_CMD[speed_idx]
             steer_cmd = INDEX_TO_CMD[steer_idx]
 
+            # 5. Write to Unity
             write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
 
-            # optional debug print (comment out if noisy)
-            reward = read_slots(mm, *slots_config['reward'])[0]
-            done = bool(read_slots(mm, *slots_config['done'])[0])
+            # Debug Print
             current_speed = read_slots(mm, *slots_config['speed'])[0]
-            print(f"Obs speed={current_speed:.3f} | action idx=({speed_idx},{steer_idx}) -> cmds=({speed_cmd},{steer_cmd}) | reward={reward:.3f} done={done}")
+            # print(f"Speed: {current_speed:.1f} | Action: {speed_cmd}, {steer_cmd}")
+
+            # Small sleep to prevent freezing
+            time.sleep(0.02)
 
     except KeyboardInterrupt:
         print("Inference interrupted by user.")
-
 
 # -------------------------
 def train_model(mm, model_path):
@@ -200,8 +206,8 @@ def train_model(mm, model_path):
     globals()['mm'] = mm
     globals()['step_wait'] = 0.04
     # Create Optimizers
-    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=5e-3)
-    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-3)
+    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003)
+    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
     clip_ratio = 0.2
 
     # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
@@ -226,6 +232,7 @@ def train_model(mm, model_path):
 
     Episode=1
     Loop=1
+    done=0
 
     global all_obs, all_actions, all_log_probs, all_rewards, all_dones, all_values, all_rtg
     all_obs=[]
@@ -238,7 +245,9 @@ def train_model(mm, model_path):
     reset()
     current_obs = Read_obs()
     while True:
-        if Episode > 0 and Episode % Episodes_Per_Batch==0:
+        # Get the total number of steps collected (T)
+        steps_collected = len(all_obs)
+        if done and steps_collected >= BATCH_SIZE_TARGET:
             reset()
             print("Updating")
             all_obs_tf=tf.stack(all_obs,axis=0)
@@ -250,8 +259,11 @@ def train_model(mm, model_path):
 
             # Get the total number of steps collected (T)
             T = tf.shape(all_rewards_tf)[0]
-            print("The number of steps: ", T, "\nWith batches: ", T % MINI_BATCH_SIZE)
-
+            sum_rewards = tf.reduce_sum(all_rewards_tf)
+            print("\n========================================")
+            print(f"Total Rewards in Batch: {sum_rewards.numpy():.2f}") # Use .numpy() to see the number!
+            print("The number of steps: ", T, "\nBatches: ", T % MINI_BATCH_SIZE)
+            print("========================================\n")
         
             # Get Bootstrapping Value ---
             # We need the value for the state that the batch ended on (current_obs)

@@ -9,7 +9,7 @@ public class CarRaycastSensor2D : MonoBehaviour
 {
     public float StartingTime = 10f;
     public static float speed;
-    public static float reward = -0.8f;
+    public static float reward = -0.02f;
     public float rayLength = 10f;
     public LayerMask obstacleMask, WallMask;
 
