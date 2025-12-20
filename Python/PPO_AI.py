@@ -8,6 +8,23 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
+import random
+
+# Define a specific number (can be anything, 42 is tradition)
+SEED_VALUE = 42
+
+# 1. Lock Python's internal random generator
+os.environ['PYTHONHASHSEED'] = str(SEED_VALUE)
+random.seed(SEED_VALUE)
+
+# 2. Lock NumPy (used for processing obs)
+np.random.seed(SEED_VALUE)
+
+# 3. Lock TensorFlow (used for weights and action sampling)
+tf.random.set_seed(SEED_VALUE)
+
+print(f"Random Seed set to: {SEED_VALUE}")
+# ------------------------
 # Shared-memory configuration (match your Unity layout)
 # ------------------------
 slots_config = {
@@ -34,14 +51,14 @@ global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH
 BATCH_SIZE_TARGET=1200
 Episode=0
 episode_steps=0
-Epochs=10
+Epochs=4
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 
 
 #Hyper parameters
-gamma=0.9 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
-gae_lambda=0.95
-entropy_coefficient=0.01
+gamma=0.99 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
+gae_lambda=0.95# "How much do I trust my specific memories vs. my general intuition?"
+entropy_coefficient=0.01 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -205,26 +222,33 @@ def train_model(mm, model_path):
     global Episode
     globals()['mm'] = mm
     globals()['step_wait'] = 0.04
+
+    # Define Initializers
+    # Gain 1.414 is standard for ReLU layers in PPO
+    init_hidden = tf.keras.initializers.Orthogonal(gain=1.414)
+    # Gain 0.01 makes the final output very small (near 0) -> Equal probabilities
+    init_final = tf.keras.initializers.Orthogonal(gain=0.01)
+
     # Create Optimizers
-    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003)
-    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003, clipnorm=0.5)
+    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003, clipnorm=0.5)
     clip_ratio = 0.2
 
     # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
     # No 'softmax' here! We want raw logits for PPO stability.
     actor = Sequential([
         tf.keras.layers.Input(shape=(26,)),
-        Dense(64, activation='relu'),
-        Dense(64, activation='relu'),
-        Dense(6)  # [Speed_Logits(3), Steer_Logits(3)]
+        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(6, kernel_initializer=init_final)  # [Speed_Logits(3), Steer_Logits(3)]
     ])
 
     # CRITIC: Outputs 1 value estimate
     critic = Sequential([
         tf.keras.layers.Input(shape=(26,)),
-        Dense(64, activation='relu'),
-        Dense(64, activation='relu'),
-        Dense(1)
+        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(1, kernel_initializer=tf.keras.initializers.Orthogonal(gain=1.0))
     ])
     
 
@@ -306,6 +330,13 @@ def train_model(mm, model_path):
                 lastgaelam = current_advantage
 
             advantages_tf = advantages.stack()
+            
+            # Normalize advantages (Critical for PPO stability)
+            adv_mean = tf.math.reduce_mean(advantages_tf)
+            adv_std = tf.math.reduce_std(advantages_tf)
+            advantages_tf = (advantages_tf - adv_mean) / (adv_std + 1e-8)
+            # ----------------------
+
             returns_tf = advantages_tf + all_values_tf
 
 

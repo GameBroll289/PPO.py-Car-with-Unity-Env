@@ -1,13 +1,9 @@
-Set Eval according to eipsodes. 
-
-Figure out the clipped advantage and fine tune it
-
 Make the env reset after a set amount of time
 
 Give rewards if a target goal is hitting the ray
 
 Show the sum_rewards in the batch eval and save the highest few
 
-Add a time limt along with a high punishment if it fails it. Along with every goal giving it more time.
-
 Increased punishment gradually as the loops increase
+
+Work on better synchronization
