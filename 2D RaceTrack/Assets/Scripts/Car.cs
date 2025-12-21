@@ -31,11 +31,11 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
-            CarRaycastSensor2D.reward = -8f;
+            CarRaycastSensor2D.reward = -4f;
             done = 1;
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
-            Time_Rimaining = 10f; // Reset time remaining
+            Time_Rimaining = 15f; // Reset time remaining
         }
     }
 
@@ -49,7 +49,7 @@ public class Car : MonoBehaviour
             score = 0;
             CarRaycastSensor2D.reward = -1.5f;
             done = 1;
-            Time_Rimaining = 10f; // Reset time remaining
+            Time_Rimaining = 15f; // Reset time remaining
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
         }
@@ -65,7 +65,7 @@ public class Car : MonoBehaviour
                 score++;
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = 2.5f+(0.3f*score);
+                    CarRaycastSensor2D.reward = 2.5f+(1*score);
                     Time_Rimaining += 5f;
                     StartCoroutine(GiveReward());
                 }

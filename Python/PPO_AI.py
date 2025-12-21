@@ -38,7 +38,7 @@ slots_config = {
     'Time_Remaining': (28, 29)   # slot 28-29
 }
 
-#25 OBS
+#26 OBS
 slot_count = 30
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
@@ -47,12 +47,13 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET
+global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop
 BATCH_SIZE_TARGET=1200
 Episode=0
 episode_steps=0
 Epochs=4
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
+start_saving_after_loop=20
 
 
 #Hyper parameters
@@ -234,8 +235,6 @@ def train_model(mm, model_path):
     critic_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003, clipnorm=0.5)
     clip_ratio = 0.2
 
-    # FIXED ACTOR: Output 6 logits (3 for speed, 3 for steering). 
-    # No 'softmax' here! We want raw logits for PPO stability.
     actor = Sequential([
         tf.keras.layers.Input(shape=(26,)),
         Dense(64, activation='relu', kernel_initializer=init_hidden),
@@ -254,6 +253,15 @@ def train_model(mm, model_path):
 
     print("Starting adaptive training...")
 
+    # ### NEW CODE: Setup Saving Variables ###
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_dir = os.path.join(script_dir, "checkpoints")
+    
+    # Create the folder if it doesn't exist
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+        
+    best_batch_reward = -float('inf')
     Episode=1
     Loop=1
     done=0
@@ -284,8 +292,10 @@ def train_model(mm, model_path):
             # Get the total number of steps collected (T)
             T = tf.shape(all_rewards_tf)[0]
             sum_rewards = tf.reduce_sum(all_rewards_tf)
+
+            current_batch_reward = float(sum_rewards.numpy())
             print("\n========================================")
-            print(f"Total Rewards in Batch: {sum_rewards.numpy():.2f}") # Use .numpy() to see the number!
+            print(f"Total Rewards in Batch: {current_batch_reward:.2f}") # Use .numpy() to see the number!
             print("The number of steps: ", T, "\nBatches: ", T % MINI_BATCH_SIZE)
             print("========================================\n")
         
@@ -296,14 +306,12 @@ def train_model(mm, model_path):
             next_value = critic(final_obs_tf)[0, 0] # Get the single scalar value
 
             # --- GAE Backward Sweep ---
-
             advantages = tf.TensorArray(dtype=tf.float32, size=T, dynamic_size=False)
             lastgaelam = tf.constant(0.0, dtype=tf.float32)
 
             # Note: Using a standard Python loop for reversed iteration is often simpler
             # and acceptable when operating on pre-collected data outside a core tf.function graph.
             for t in reversed(range(T.numpy())):
-                
                 # Check if this is the last collected step
                 if t == T.numpy() - 1:
                     # Logic for the last step (bootstrapping)
@@ -339,7 +347,6 @@ def train_model(mm, model_path):
 
             returns_tf = advantages_tf + all_values_tf
 
-
             # ----------------------------------------------------
             # STEP 1: Zip the input Tensors into a single Dataset
             # ----------------------------------------------------
@@ -351,7 +358,6 @@ def train_model(mm, model_path):
                 advantages_tf,          # The calculated Advantages
                 tf.stack(all_log_probs) # The old log probabilities
             ))
-
             # ----------------------------------------------------
             # STEP 2: Shuffle, Batch, and Pre-fetch the Dataset
             # ----------------------------------------------------
@@ -362,7 +368,6 @@ def train_model(mm, model_path):
             )
             ppo_dataset = ppo_dataset.batch(MINI_BATCH_SIZE)
             ppo_dataset = ppo_dataset.prefetch(tf.data.AUTOTUNE) # Optimization: loads next batch while current batch is being processed
-
             # ----------------------------------------------------
             # STEP 3: Run the PPO Epochs
             # ----------------------------------------------------
@@ -427,6 +432,23 @@ def train_model(mm, model_path):
                     critic_optimizer.apply_gradients(zip(critic_grads, critic.trainable_variables))
                     
                     del tape # Free up memory
+                
+            if Loop >= start_saving_after_loop:
+                if current_batch_reward > best_batch_reward:
+                    print(f"New Record ({current_batch_reward:.2f} > {best_batch_reward:.2f})! Saving Checkpoint...")
+                    best_batch_reward = current_batch_reward
+                    
+                    # Create a specific name like: Loop_25_Reward_450.0
+                    save_name = f"Loop_{Loop}_Reward_{int(best_batch_reward)}"
+                    save_path = os.path.join(checkpoint_dir, save_name)
+                    
+                    # Save the Actor model in SavedModel format (Using low-level TF save)
+                    tf.saved_model.save(actor, save_path)
+                    
+                    # Also update the main 'car_agent' folder
+                    tf.saved_model.save(actor, model_path)
+            else:
+                print(f"Warming up... (Loop {Loop}/{start_saving_after_loop})")
             
             # Clear buffers for next batch
             all_obs.clear()
@@ -462,8 +484,6 @@ def train_model(mm, model_path):
             Episode += 1
             reset()
             current_obs = Read_obs() # Get fresh observation for new episode
-                    
-    print("Training complete. Best actor saved.")
 # -------------------------
 def main():
     # Relative actor path
