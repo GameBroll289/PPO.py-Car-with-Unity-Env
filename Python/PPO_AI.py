@@ -25,7 +25,7 @@ tf.random.set_seed(SEED_VALUE)
 
 print(f"Random Seed set to: {SEED_VALUE}")
 # ------------------------
-# Shared-memory configuration (match your Unity layout)
+# Shared-memory configuration (match your Unity etc layout)
 # ------------------------
 slots_config = {
     'ray_distances': (0, 8),   # slots 0-7
@@ -34,12 +34,13 @@ slots_config = {
     'done': (17, 18),          # slot 17
     'actions': (18, 20),       # slots 18-19: speed, steering (write)
     'speed': (20, 21),          # slot 20: current speed (read-only)
-    'Wall_distances': (21, 29),   # slots 21-28
-    'Time_Remaining': (28, 29)   # slot 28-29
+    'Time_Remaining': (21, 22),   # slot 21
+    'Wall_distances': (22, 30),   # slots 22-28
+    'sync': (30, 31)
 }
 
 #26 OBS
-slot_count = 30
+slot_count = 31
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
 TAGNAME = 'unity_ram'  # mmap tag used by Unity too
@@ -100,7 +101,17 @@ def reset():
     global Episode, episode_steps
     # Optionally: write neutral actions and wait a short bit
     write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
-    time.sleep(step_wait)
+
+    # 2. SIGNAL UNITY (WAKE UP!) <--- This is the key line
+    write_slots(mm, *slots_config['sync'], values=[1.0])
+    
+    # 3. WAIT FOR UNITY
+    while True:
+        sync_val = read_slots(mm, *slots_config['sync'])[0]
+        if sync_val == 0.0:
+            break
+        time.sleep(0.001)
+    Read_obs()  # Clear initial obs
     episode_steps = 0
     print(f"Starting Episode: {Episode}")
 
@@ -133,8 +144,13 @@ def step(action_logits,value):
     # Write actions
     write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
 
-    # Allow Unity to step forward
-    time.sleep(step_wait)
+    while True:
+        sync_val = read_slots(mm, *slots_config['sync'])[0]
+        if sync_val == 0.0:
+            break
+        # Tiny sleep to prevent 100% CPU usage while waiting
+        # But small enough to be near-instant
+        time.sleep(0.001)
 
     # Read obs/reward/done
     obs = Read_obs()

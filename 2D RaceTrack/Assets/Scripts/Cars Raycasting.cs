@@ -4,7 +4,6 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 
-
 public class CarRaycastSensor2D : MonoBehaviour
 {
     public float StartingTime = 15f;
@@ -38,93 +37,119 @@ public class CarRaycastSensor2D : MonoBehaviour
     };
     // Memory Mapped File variables
     const string memoryName = "unity_ram";
-    const int slotCount = 30;   // must match Python
+    const int slotCount = 31;   // must match Python
     const int slotSize = 4;     // float32
     const int totalSize = slotCount * slotSize;
 
     MemoryMappedFile mmf;
     MemoryMappedViewAccessor accessor;
-    void Awake() {
-    obstacleMask = LayerMask.GetMask("Raycast", "Wall");
-    WallMask = LayerMask.GetMask("Wall");
-}
+    // --- Script References ---
+    Car carScript;
+    AICarController aiController;
+
+    void Awake() 
+    {
+        obstacleMask = LayerMask.GetMask("Raycast", "Wall");
+        WallMask = LayerMask.GetMask("Wall");
+        
+        carScript = GetComponent<Car>();
+        aiController = GetComponent<AICarController>();
+
+        // IMPORTANT: We take control of the Physics Clock
+        Physics2D.simulationMode = SimulationMode2D.Script;
+    }
 
     void Start()
     {
-        
         mmf = MemoryMappedFile.CreateOrOpen(memoryName, totalSize, MemoryMappedFileAccess.ReadWrite);
-
-
         accessor = mmf.CreateViewAccessor(0, totalSize, MemoryMappedFileAccess.ReadWrite);
+        
+        // Clear the sync flag on start
+        WriteFloat(30, 0f);
     }
 
-    void FixedUpdate()
+    void Update()
     {
-        float[] HitsInfo = new float[localDirections.Length]; // All elements are 0 by default
-
-        for (int i = 0; i < localDirections.Length; i++)
+        // 1. Check if Python has sent a command (Sync == 1)
+        float syncState = ReadFloat(30);
+        
+        if (syncState == 1f)
         {
+            // === IT IS UNITY'S TURN ===
+            float fixedDt = 0.02f;
+
+            // A. Reset per-step variables
+            Car.done = 0; 
+            reward = -0.02f; 
+            
+            // B. Read Actions from Python
+            float moveAction = ReadFloat(18);
+            float turnAction = ReadFloat(19);
+            
+            // C. Apply Forces via your AI Controller
+            if (aiController != null)
+            {
+                aiController.ManualMove(moveAction, turnAction, fixedDt);
+            }
+
+            // D. Step Physics Manually
+            Physics2D.Simulate(fixedDt);
+            
+            // E. Update Game Logic (Timer, Score checks)
+            carScript.ManualUpdate(fixedDt);
+
+            // F. Gather Observations (Raycasts)
+            PerformRaycasts();
+            speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 11f;
+
+            // G. Write State back to MMF
+            WriteFloats(0, rayDistances);
+            WriteFloats(8, GetHitsInfo());
+            WriteFloat(16, reward + speed); 
+            WriteFloat(17, Car.done);
+            WriteFloat(20, speed);
+            WriteFloat(21, Car.Time_Rimaining / carScript.speed);
+            WriteFloats(22, WallDistances);
+            
+            // H. HANDSHAKE: Tell Python we are done
+            WriteFloat(30, 0f); 
+            
+            accessor.Flush();
+        }
+    }
+    
+    // --- Helper Methods ---
+    void PerformRaycasts() {
+        for (int i = 0; i < localDirections.Length; i++) {
             Vector2 direction = transform.TransformDirection(localDirections[i]);
             RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, rayLength, obstacleMask);
             RaycastHit2D hitWall = Physics2D.Raycast(transform.position, direction, rayLength, WallMask);
 
-            if (hit.collider != null)
-            {
-                //If hits current goal "-1" and if previous than "-0.5" and if one of the next goal than "-0.3"
-                if (hit.collider.CompareTag("Goal"))
-                {
-                    Goals goal = hit.collider.GetComponent<Goals>();
-
-                    if (goal.goalNumber == Car.score)
-                    {
-                        HitsInfo[i] = -1;
-                    }
-                    else if (goal.goalNumber < Car.score)
-                    {
-                        HitsInfo[i] = -0.5f;
-                    }
-                    else if (goal.goalNumber > Car.score)
-                    {
-                        HitsInfo[i] = -0.3f;
-                    }
-                }
-
+            if (hit.collider != null) {
                 rayDistances[i] = hit.distance / rayLength;
                 WallDistances[i] = hitWall.distance / rayLength;
-                //Blue ray if something is hit
-                Debug.DrawRay(transform.position, direction * hitWall.distance, Color.chocolate);
                 Debug.DrawRay(transform.position, direction * hit.distance, Color.blue);
-            }
-            else
-            {
+            } else {
                 rayDistances[i] = 1f;
                 WallDistances[i] = 1f;
-                //Red ray if nothing is hit
-                Debug.DrawRay(transform.position, direction * rayLength, Color.darkRed);
                 Debug.DrawRay(transform.position, direction * rayLength, Color.red);
             }
         }
+    }
 
-        speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 11f;
-
-        // Write state to shared memory
-        WriteFloats(0, rayDistances);
-        WriteFloats(8, HitsInfo);
-        WriteFloat(16, reward+speed); // Cumulative reward
-        WriteFloat(17, Car.done);
-        WriteFloat(20, (speed)); // Speed normalized
-        WriteFloats(21, WallDistances);
-        WriteFloat(28, Car.Time_Rimaining/StartingTime); // Placeholder
-        accessor.Flush();
-
-        // Read actions back from Python
-        float acceleration = ReadFloat(18); //3
-        float steering = ReadFloat(19); //4
-
-        // Debug.Log to console
-        Debug.Log($"R: {reward+speed}");
-        //Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
-        //Car.done = 0;
+    float[] GetHitsInfo() {
+        float[] HitsInfo = new float[8];
+        for (int i = 0; i < localDirections.Length; i++) {
+             Vector2 direction = transform.TransformDirection(localDirections[i]);
+             RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, rayLength, obstacleMask);
+             if (hit.collider != null && hit.collider.CompareTag("Goal")) {
+                Goals goal = hit.collider.GetComponent<Goals>();
+                if (goal.goalNumber == Car.score) HitsInfo[i] = -1;
+                else if (goal.goalNumber < Car.score) HitsInfo[i] = -0.5f;
+                else HitsInfo[i] = -0.3f;
+             }
+        }
+        return HitsInfo;
     }
 
 
