@@ -35,7 +35,7 @@ slots_config = {
     'actions': (18, 20),       # slots 18-19: speed, steering (write)
     'speed': (20, 21),          # slot 20: current speed (read-only)
     'Wall_distances': (21, 29),   # slots 21-28
-    'Time_Remaining': (28, 29)   # slot 28-29
+    'Time_Remaining': (29, 30)   # slot 29: time remaining (read-only)
 }
 
 #26 OBS
@@ -324,7 +324,7 @@ def train_model(mm, model_path):
                     nextvalues = next_value
                 else:
                     # Logic for all other steps
-                    nextnonterminal = 1.0 - all_dones_tf[t + 1]
+                    nextnonterminal = 1.0 - all_dones_tf[t]
                     nextvalues = all_values_tf[t + 1]
 
                 # TD Error (Delta)
@@ -356,7 +356,8 @@ def train_model(mm, model_path):
                 tf.stack(all_actions),  # Actions taken
                 returns_tf,             # The calculated Returns-to-Go
                 advantages_tf,          # The calculated Advantages
-                tf.stack(all_log_probs) # The old log probabilities
+                tf.stack(all_log_probs), # The old log probabilities
+                all_values_tf
             ))
             # ----------------------------------------------------
             # STEP 2: Shuffle, Batch, and Pre-fetch the Dataset
@@ -375,7 +376,7 @@ def train_model(mm, model_path):
                 print(f"  Epoch {epoch+1}/{Epochs}")
                 
                 for mini_batch in ppo_dataset:
-                    m_obs, m_actions, m_returns, m_advantages, m_old_log_probs = mini_batch
+                    m_obs, m_actions, m_returns, m_advantages, m_old_log_probs, m_old_values = mini_batch
                     
                     # Open a GradientTape to record operations for Automatic Differentiation
                     with tf.GradientTape(persistent=True) as tape:
@@ -409,10 +410,19 @@ def train_model(mm, model_path):
                         policy_loss = -tf.reduce_mean(tf.minimum(surr1, surr2))
                         
                         # 7. VALUE LOSS (MSE)
-                        # We want the critic to predict the Returns (Real Reward + Future Reward)
-                        value_loss = tf.reduce_mean(tf.square(m_returns - tf.squeeze(current_values)))
-                        # huber = tf.keras.losses.Huber()
-                        # value_loss = huber(m_returns, tf.squeeze(current_values))
+                        # 7. VALUE LOSS (Clipped)
+                        v_pred = tf.squeeze(current_values)
+
+                        # Clip the difference between old and new value predictions
+                        # This prevents the critic from moving too far from its previous prediction
+                        v_pred_clipped = m_old_values + tf.clip_by_value(v_pred - m_old_values, -clip_ratio, clip_ratio)
+
+                        # Calculate both losses
+                        loss_v_unclipped = tf.square(v_pred - m_returns)
+                        loss_v_clipped = tf.square(v_pred_clipped - m_returns)
+
+                        # Take the maximum (pessimistic bound)
+                        value_loss = 0.5 * tf.reduce_mean(tf.maximum(loss_v_unclipped, loss_v_clipped))
 
                         
                         # 8. ENTROPY BONUS (To encourage exploration)

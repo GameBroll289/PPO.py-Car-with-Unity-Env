@@ -15,7 +15,7 @@ public class AICarController : MonoBehaviour
     private const int actionStart = 18;
     private const int actionCount = 2;
 
-    const int slotCount = 29;   // must match Python
+    const int slotCount = 30;   // must match Python
     const int totalSize = slotCount * slotSize;
 
     void Start()

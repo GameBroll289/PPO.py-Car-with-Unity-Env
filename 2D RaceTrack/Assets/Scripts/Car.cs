@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Car : MonoBehaviour
 {
-    public static float Time_Rimaining = 10f;
+    public static float Time_Rimaining = 30f;
     public static int score = 0;
     public static int done = 0;
     private bool canGiveReward = true;
@@ -31,11 +31,11 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
-            CarRaycastSensor2D.reward = -4f;
+            CarRaycastSensor2D.reward = -30f;
             done = 1;
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
-            Time_Rimaining = 15f; // Reset time remaining
+            Time_Rimaining = 30f; // Reset time remaining
         }
     }
 
@@ -47,7 +47,7 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, 0); // Reset rotation
             score = 0;
-            CarRaycastSensor2D.reward = -1.5f;
+            CarRaycastSensor2D.reward = -20f;
             done = 1;
             Time_Rimaining = 15f; // Reset time remaining
             StartCoroutine(GiveReward());
@@ -65,7 +65,7 @@ public class Car : MonoBehaviour
                 score++;
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = 2.5f+(1*score);
+                    CarRaycastSensor2D.reward = 0f+(17*score);
                     Time_Rimaining += 5f;
                     StartCoroutine(GiveReward());
                 }
@@ -74,7 +74,7 @@ public class Car : MonoBehaviour
             {
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = -(0.4f+(score*score));
+                    CarRaycastSensor2D.reward = -(1f+(score*score));
                     StartCoroutine(GiveReward());
                 }
             }
@@ -82,7 +82,7 @@ public class Car : MonoBehaviour
             {
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = -0.46f;
+                    CarRaycastSensor2D.reward = -1.6f;
                     StartCoroutine(GiveReward());
                 }
             }
@@ -95,7 +95,7 @@ public class Car : MonoBehaviour
         Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
 
         yield return new WaitForSeconds(0.04f);
-        CarRaycastSensor2D.reward = -0.02f;
+        CarRaycastSensor2D.reward = -0.06f;
 
         // Wait for 0.5 seconds
         yield return new WaitForSeconds(0.16f);
