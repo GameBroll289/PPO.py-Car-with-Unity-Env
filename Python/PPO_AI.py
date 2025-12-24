@@ -48,10 +48,10 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
 global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop
-BATCH_SIZE_TARGET=1200
+BATCH_SIZE_TARGET=2400
 Episode=0
 episode_steps=0
-Epochs=4
+Epochs=10
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 start_saving_after_loop=20
 
@@ -59,7 +59,7 @@ start_saving_after_loop=20
 #Hyper parameters
 gamma=0.99 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
 gae_lambda=0.95# "How much do I trust my specific memories vs. my general intuition?"
-entropy_coefficient=0.01 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
+entropy_coefficient=0.006 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -140,6 +140,9 @@ def step(action_logits,value):
     obs = Read_obs()
     reward = read_slots(mm, *slots_config['reward'])[0]
     done = bool(read_slots(mm, *slots_config['done'])[0])
+
+    if reward>=1 or reward<=-1:
+        print("Non Passive: ", reward,"\n")
     
     # Save the combined action [speed, steer] for the training buffer
     final_action_indices = [speed_idx, steer_idx]
@@ -237,16 +240,16 @@ def train_model(mm, model_path):
 
     actor = Sequential([
         tf.keras.layers.Input(shape=(26,)),
-        Dense(64, activation='relu', kernel_initializer=init_hidden),
-        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(128, activation='relu', kernel_initializer=init_hidden),
+        Dense(128, activation='relu', kernel_initializer=init_hidden),
         Dense(6, kernel_initializer=init_final)  # [Speed_Logits(3), Steer_Logits(3)]
     ])
 
     # CRITIC: Outputs 1 value estimate
     critic = Sequential([
         tf.keras.layers.Input(shape=(26,)),
-        Dense(64, activation='relu', kernel_initializer=init_hidden),
-        Dense(64, activation='relu', kernel_initializer=init_hidden),
+        Dense(128, activation='relu', kernel_initializer=init_hidden),
+        Dense(128, activation='relu', kernel_initializer=init_hidden),
         Dense(1, kernel_initializer=tf.keras.initializers.Orthogonal(gain=1.0))
     ])
     
@@ -498,7 +501,7 @@ def train_model(mm, model_path):
 def main():
     # Relative actor path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "car_agent")
+    model_path = os.path.join(script_dir, "car_agent.zip")
 
     # Mode and other configs hardcoded
     print("(T)rain or (I)nfer?",end=' ')
