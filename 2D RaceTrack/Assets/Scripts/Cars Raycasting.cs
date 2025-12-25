@@ -7,7 +7,7 @@ using JetBrains.Annotations;
 
 public class CarRaycastSensor2D : MonoBehaviour
 {
-    public float StartingTime = 30f;
+    public float StartingTime = 60f;
     public static float speed;
     public static float reward = -0.02f;
     public float rayLength = 10f;

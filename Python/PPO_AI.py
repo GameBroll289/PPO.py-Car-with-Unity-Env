@@ -48,10 +48,10 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
 global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop
-BATCH_SIZE_TARGET=2400
+BATCH_SIZE_TARGET=1200
 Episode=0
 episode_steps=0
-Epochs=10
+Epochs=5
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 start_saving_after_loop=20
 
@@ -59,7 +59,7 @@ start_saving_after_loop=20
 #Hyper parameters
 gamma=0.99 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
 gae_lambda=0.95# "How much do I trust my specific memories vs. my general intuition?"
-entropy_coefficient=0.006 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
+entropy_coefficient=0.01 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -501,7 +501,7 @@ def train_model(mm, model_path):
 def main():
     # Relative actor path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "car_agent.zip")
+    model_path = os.path.join(script_dir, "checkpoints\Loop_85_Reward_1942")
 
     # Mode and other configs hardcoded
     print("(T)rain or (I)nfer?",end=' ')
