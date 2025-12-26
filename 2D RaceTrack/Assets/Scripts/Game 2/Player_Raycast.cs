@@ -4,11 +4,14 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 
-
-public class CarRaycastSensor2D : MonoBehaviour
-{   public static float reward = -0.02f;
+namespace two{
+public class Player_Raycast : MonoBehaviour
+{   
+    public static float reward = -0.02f;
     public float rayLength = 10f;
     public LayerMask obstacleMask;
+    public static float done = 0f;
+    public static float[] obs = new float[4]; // Goal x & y, Player
 
     [HideInInspector]
     public float[] WallDistances = new float[4];
@@ -48,8 +51,6 @@ public class CarRaycastSensor2D : MonoBehaviour
             Vector2 direction = transform.TransformDirection(localDirections[i]);
             RaycastHit2D hitWall = Physics2D.Raycast(transform.position, direction, rayLength, obstacleMask);
 
-            
-            rayDistances[i] = hit.distance / rayLength;
             WallDistances[i] = hitWall.distance / rayLength;
             //Blue ray if something is hit
             Debug.DrawRay(transform.position, direction * hitWall.distance, Color.white);
@@ -61,12 +62,14 @@ public class CarRaycastSensor2D : MonoBehaviour
                 Debug.DrawRay(transform.position, direction * rayLength, Color.black);
             }
         }
-
+        obs[0] = transform.position.x;
+        obs[1] = transform.position.y;
+        obs[2] = Gem.posX;
+        obs[3] = Gem.posY;
         // Write state to shared memory
-            
         WriteFloats(2, obs);//Goal and player x & y positions
         WriteFloats(6, WallDistances);
-        WriteFloat(10, CarRaycastSensor2D.reward); // Cumulative reward
+        WriteFloat(10, reward); // Cumulative reward
         WriteFloat(11, done);
         accessor.Flush();
 
@@ -104,3 +107,4 @@ public class CarRaycastSensor2D : MonoBehaviour
         return accessor.ReadSingle(slot * slotSize);
     }
 }
+}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

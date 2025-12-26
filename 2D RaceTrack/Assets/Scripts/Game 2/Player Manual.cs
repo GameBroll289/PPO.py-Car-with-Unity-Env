@@ -1,5 +1,6 @@
 using UnityEngine;
 
+namespace two{
 public class PlayerManual : MonoBehaviour
 {
     float moveSpeed = 5f;
@@ -16,7 +17,7 @@ public class PlayerManual : MonoBehaviour
         float vertical = Input.GetAxis("Vertical"); 
         float horizontal = Input.GetAxis("Horizontal");
 
-        transform.Translate(Vector3.up * vertical * moveSpeed * Time.fixedDeltaTime);
-        transform.Rotate(Vector3.forward, -horizontal * rotateSpeed * Time.fixedDeltaTime);
+        transform.Translate(Vector2.up * vertical * moveSpeed * Time.fixedDeltaTime);
+        transform.Rotate(Vector2.up, -horizontal * rotateSpeed * Time.fixedDeltaTime);
     }
-}
+}}

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class Goals : MonoBehaviour
+namespace one{public class Goals : MonoBehaviour
 {
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     public int goalNumber;
@@ -25,4 +25,4 @@ public class Goals : MonoBehaviour
             GetComponent<SpriteRenderer>().color = new Color(0.55f, 0f, 0f); // Dark red
         }
     }
-}
+}}

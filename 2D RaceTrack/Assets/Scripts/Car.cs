@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
+namespace one{
 public class Car : MonoBehaviour
 {
     public static float Time_Rimaining = 60f;
@@ -122,4 +123,4 @@ public class Car : MonoBehaviour
             // If "Raycast" is not the exact name, use the integer ID directly, e.g., other.gameObject.layer = 6;
         }
     }
-}
+}}

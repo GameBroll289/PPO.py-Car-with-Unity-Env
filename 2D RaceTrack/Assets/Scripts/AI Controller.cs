@@ -3,6 +3,8 @@ using System.IO.MemoryMappedFiles;
 using System;
 using System.Runtime.InteropServices;
 
+namespace one{
+
 public class AICarController : MonoBehaviour
 {
     public float speed;
@@ -61,4 +63,5 @@ public class AICarController : MonoBehaviour
     {
         accessor.Write(slot * slotSize, value);
     }
+}
 }

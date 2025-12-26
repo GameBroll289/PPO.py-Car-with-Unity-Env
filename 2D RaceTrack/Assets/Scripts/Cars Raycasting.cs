@@ -4,7 +4,7 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 
-
+namespace one{
 public class CarRaycastSensor2D : MonoBehaviour
 {
     public float StartingTime = 60f;
@@ -117,13 +117,9 @@ public class CarRaycastSensor2D : MonoBehaviour
         WriteFloat(29, Car.Time_Rimaining/StartingTime); // Placeholder
         accessor.Flush();
 
-        // Read actions back from Python
-        float acceleration = ReadFloat(18); //3
-        float steering = ReadFloat(19); //4
-
         // Debug.Log to console
         Debug.Log($"R: {CarRaycastSensor2D.reward+speed}");
-        Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
+        //Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
         //Car.done = 0;
     }
 
@@ -154,4 +150,5 @@ public class CarRaycastSensor2D : MonoBehaviour
     {
         return accessor.ReadSingle(slot * slotSize);
     }
+}
 }

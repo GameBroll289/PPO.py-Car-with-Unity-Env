@@ -330,7 +330,7 @@ def train_model(mm, model_path):
                     nextvalues = next_value
                 else:
                     # Logic for all other steps
-                    nextnonterminal = 1.0 - all_dones_tf[t]
+                    nextnonterminal = 1.0 - all_dones_tf[t] #Cant see beyond done
                     nextvalues = all_values_tf[t + 1]
 
                 # TD Error (Delta)

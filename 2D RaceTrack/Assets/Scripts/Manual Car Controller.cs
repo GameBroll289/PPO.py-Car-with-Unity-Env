@@ -1,5 +1,6 @@
 using UnityEngine;
 
+namespace one{
 public class ManualCarController : MonoBehaviour
 {
     public float speed;
@@ -25,4 +26,5 @@ public class ManualCarController : MonoBehaviour
         //rb.MoveRotation(rb.rotation - turn);
         rb.AddTorque(-turn * turnSpeed * Time.deltaTime, ForceMode2D.Force);
     }
+}
 }

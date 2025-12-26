@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.IO.MemoryMappedFiles;
 
+namespace two{
 public class Player : MonoBehaviour
 {
     private const float SIGNAL_CODE = -999.0f;
@@ -50,4 +51,5 @@ public class Player : MonoBehaviour
     {
         accessor.Write(slot * slotSize, value);
     }
+}
 }
