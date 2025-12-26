@@ -7,3 +7,5 @@ Show the sum_rewards in the batch eval and save the highest few
 Increased punishment gradually as the loops increase
 
 Work on better synchronization
+
+Add goal being masked when colliding with car

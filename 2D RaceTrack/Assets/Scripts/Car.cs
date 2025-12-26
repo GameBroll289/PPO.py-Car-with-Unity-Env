@@ -31,7 +31,7 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, -88.906f); // Reset rotation
             score = 2;
-            CarRaycastSensor2D.reward = -1f;
+            CarRaycastSensor2D.reward = -20f;
             done = 1;
             StartCoroutine(GiveReward());
             StartCoroutine(Done());
@@ -47,7 +47,7 @@ public class Car : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
             transform.rotation = Quaternion.Euler(0, 0, -88.906f); // Reset rotation
             score = 2;
-            CarRaycastSensor2D.reward = -5f;
+            CarRaycastSensor2D.reward = -15f;
             done = 1;
             Time_Rimaining = 60f; // Reset time remaining
             StartCoroutine(GiveReward());
@@ -59,13 +59,16 @@ public class Car : MonoBehaviour
     {
         if (other.CompareTag("Goal"))
         {
+            // [NEW] Make the goal invisible to raycasts instantly
+            other.gameObject.layer = 2; // Layer 2 is 'Ignore Raycast' by default in Unity
+
             Goals goal = other.GetComponent<Goals>();
             if (goal.goalNumber == score)
             {
                 score++;
                 if (canGiveReward)
                 {
-                    CarRaycastSensor2D.reward = 10+(score*0.5f);
+                    CarRaycastSensor2D.reward = score*3f;
                     Time_Rimaining += 15f;
                     StartCoroutine(GiveReward());
                 }
@@ -87,14 +90,14 @@ public class Car : MonoBehaviour
                 }
             }
         }
-    }
+ } 
 
     private IEnumerator GiveReward()
     {
         canGiveReward = false;  // prevent multiple rewards immediately
         Debug.Log($"Reward: {CarRaycastSensor2D.reward}");
 
-        yield return new WaitForSeconds(0.079f);
+        yield return new WaitForSeconds(0.070f);
         CarRaycastSensor2D.reward = -0.04f;
 
         // Wait for 0.5 seconds
@@ -104,8 +107,19 @@ public class Car : MonoBehaviour
     }
     private IEnumerator Done()
     {
-        yield return new WaitForSeconds(0.079f);
+        yield return new WaitForSeconds(0.070f);
         done = 0;
     }
     
+    // [NEW] Add this function to restore the layer when you leave the goal
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (other.CompareTag("Goal"))
+        {
+            // Restore the goal to the 'Raycast' layer (assuming Raycast layer is index 6 or 7?)
+            // Use the Layer ID your goals are normally on (e.g., 0 for Default, 6 for Raycast)
+            other.gameObject.layer = LayerMask.NameToLayer("Raycast"); 
+            // If "Raycast" is not the exact name, use the integer ID directly, e.g., other.gameObject.layer = 6;
+        }
+    }
 }

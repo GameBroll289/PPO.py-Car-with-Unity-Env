@@ -112,7 +112,7 @@ public class CarRaycastSensor2D : MonoBehaviour
         WriteFloats(8, HitsInfo);
         WriteFloat(16, CarRaycastSensor2D.reward+speed); // Cumulative reward
         WriteFloat(17, Car.done);
-        WriteFloat(20, (speed)); // Speed normalized
+        WriteFloat(20, speed); // Speed normalized
         WriteFloats(21, WallDistances);
         WriteFloat(29, Car.Time_Rimaining/StartingTime); // Placeholder
         accessor.Flush();
@@ -123,7 +123,7 @@ public class CarRaycastSensor2D : MonoBehaviour
 
         // Debug.Log to console
         Debug.Log($"R: {CarRaycastSensor2D.reward+speed}");
-        //Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
+        Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
         //Car.done = 0;
     }
 

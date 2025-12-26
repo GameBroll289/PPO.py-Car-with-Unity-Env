@@ -47,11 +47,12 @@ TAGNAME = 'unity_ram'  # mmap tag used by Unity too
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop
-BATCH_SIZE_TARGET=1200
+global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop, SIGNAL_CODE
+SIGNAL_CODE = -999.0
+BATCH_SIZE_TARGET=2400
 Episode=0
 episode_steps=0
-Epochs=5
+Epochs=8
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 start_saving_after_loop=20
 
@@ -133,8 +134,13 @@ def step(action_logits,value):
     # Write actions
     write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
 
-    # Allow Unity to step forward
-    time.sleep(step_wait)
+    # 2. WAIT for Unity to finish the frame (Handshake)
+    while True:
+        current_val = read_slots(mm, *slots_config['actions'])[0]
+        if current_val == SIGNAL_CODE:
+            break # Unity has processed the action
+        time.sleep(0.001)  # Sleep briefly to avoid busy-waiting
+            
 
     # Read obs/reward/done
     obs = Read_obs()
@@ -171,56 +177,57 @@ def load_model(mm, model_path):
     Inference loop: Load raw SavedModel & run.
     Uses tf.saved_model.load to avoid Keras 3 format errors.
     """
+    globals()['mm'] = mm
+    globals()['step_wait'] = 0.04
+    
+    
     print(f"Loading SavedModel from: {model_path}")
     
-    # FIX 1: Use low-level loader (Works with Keras 3 and SavedModel folders)
     imported_model = tf.saved_model.load(model_path)
     inference_func = imported_model.signatures["serving_default"]
 
     print("Model loaded successfully. Starting inference...")
-    try:
+    
+    # Reset environment once to align state
+    reset() 
+    
+    while True:
+        # 1. Read Observations using the SAFE function (handles NaNs)
+        obs = Read_obs()
+        
+        # 2. Prepare Input Tensor
+        input_tensor = tf.constant(obs[None, :], dtype=tf.float32)
+
+        # 3. Run Prediction
+        predictions = inference_func(input_tensor)
+        
+        # Safe extraction: usually the key is the output layer name, 
+        # but values()[0] is acceptable if you only have one output.
+        logits = list(predictions.values())[0] 
+        
+        # 4. Decode Actions (Deterministic/Greedy for Inference)
+        speed_logits = logits[0, :3]
+        steer_logits = logits[0, 3:]
+        
+        speed_idx = int(tf.argmax(speed_logits))
+        steer_idx = int(tf.argmax(steer_logits))
+
+        speed_cmd = INDEX_TO_CMD[speed_idx]
+        steer_cmd = INDEX_TO_CMD[steer_idx]
+
+        # 5. Write to Unity
+        write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
+
+        # 6. CRITICAL FIX: Wait for Unity Handshake
+        # This ensures we don't overwrite the action before Unity sees it,
+        # and we don't read the same observation twice.
         while True:
-            # 1. Read Observations
-            obs = np.array(read_slots(mm, *slots_config['Wall_distances']) +
-                           read_slots(mm, *slots_config['ray_distances']) +
-                           read_slots(mm, *slots_config['ray_hits']) +
-                           [read_slots(mm, *slots_config['speed'])[0]] + 
-                           [read_slots(mm, *slots_config['Time_Remaining'])[0]], dtype=np.float32) # Added Time_Remaining
-            
-            # 2. Prepare Input Tensor (Add batch dimension: Shape (1, 26))
-            input_tensor = tf.constant(obs[None, :], dtype=tf.float32)
-
-            # 3. Run Prediction
-            # Output is a dictionary, we grab the first tensor (the logits)
-            predictions = inference_func(input_tensor)
-            logits = list(predictions.values())[0] # Shape (1, 6)
-            
-            # FIX 2: Convert Logits to Action Indices
-            # The model outputs 6 raw numbers. We must split them and find the highest one.
-            speed_logits = logits[0, :3] # First 3 numbers
-            steer_logits = logits[0, 3:] # Last 3 numbers
-            
-            # Use argmax to pick the best action (Deterministic/Greedy)
-            speed_idx = int(tf.argmax(speed_logits))
-            steer_idx = int(tf.argmax(steer_logits))
-
-            # 4. Convert Index to Command (-1, 0, 1)
-            speed_cmd = INDEX_TO_CMD[speed_idx]
-            steer_cmd = INDEX_TO_CMD[steer_idx]
-
-            # 5. Write to Unity
-            write_slots(mm, *slots_config['actions'], values=[speed_cmd, steer_cmd])
-
-            # Debug Print
-            current_speed = read_slots(mm, *slots_config['speed'])[0]
-            # print(f"Speed: {current_speed:.1f} | Action: {speed_cmd}, {steer_cmd}")
-
-            # Small sleep to prevent freezing
-            time.sleep(0.02)
-
-    except KeyboardInterrupt:
-        print("Inference interrupted by user.")
-
+            # Read the first float of the action slot
+            current_val = read_slots(mm, *slots_config['actions'])[0]
+            if current_val == SIGNAL_CODE:
+                break 
+            # Busy wait is fine here, or very short sleep
+        time.sleep(0.001) 
 # -------------------------
 def train_model(mm, model_path):
     global Episode
@@ -501,7 +508,7 @@ def train_model(mm, model_path):
 def main():
     # Relative actor path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "checkpoints\Loop_85_Reward_1942")
+    model_path = os.path.join(script_dir, "C:\\Unity Projects\\PPO.py_Car_with_UnityEnv\\Python\\checkpoints\\Loop_20_Reward_611")
 
     # Mode and other configs hardcoded
     print("(T)rain or (I)nfer?",end=' ')

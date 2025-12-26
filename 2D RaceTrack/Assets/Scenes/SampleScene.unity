@@ -2458,7 +2458,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -11.429999, y: 3.4200003, z: 0}
-  m_LocalScale: {x: 3.0745704, y: 0.3839, z: 1}
+  m_LocalScale: {x: 3.561275, y: 0.3839, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 457626494}
@@ -5981,11 +5981,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 250807171831772111, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: speed
-      value: 130
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 250807171831772111, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: turnSpeed
-      value: 12
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 998120813324748620, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: m_LinearDamping
@@ -6061,7 +6061,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7462653149305656822, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: rayLength
-      value: 15
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 7462653149305656822, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
+      propertyPath: StartingTime
+      value: 60
       objectReference: {fileID: 0}
     - target: {fileID: 7540198923765980880, guid: 080ad6ec8654f0847bdce3e93b36283c, type: 3}
       propertyPath: m_Name
