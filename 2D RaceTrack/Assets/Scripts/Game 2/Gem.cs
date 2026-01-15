@@ -15,7 +15,6 @@ public class Gem : MonoBehaviour
 
     void Start()
     {
-        SpawnObject();
     }
 
     public void SpawnObject()
@@ -31,13 +30,10 @@ public class Gem : MonoBehaviour
 
         // 4. Spawn the object
         // If "objectToSpawn" is null, we assume this script is ON the object we want to move/copy
-        if (objectToSpawn != null)
-        {
-            Instantiate(objectToSpawn, spawnPosition, Quaternion.identity);
-        }
+        Instantiate(objectToSpawn, spawnPosition, Quaternion.identity);
     }
 
-    void ontriggerEnter2D(Collider2D other)
+    void OnTriggerEnter2D(Collider2D other)
     {
         if (other.CompareTag("Player"))
         {
@@ -67,6 +63,5 @@ public class Gem : MonoBehaviour
     {
         yield return new WaitForSeconds(0.070f);
         done = 0;
-    }
-    }
+    }}
 }

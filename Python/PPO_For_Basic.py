@@ -34,10 +34,11 @@ slots_config = {
     'ray_distances': (6, 10), # slots 6-9: 4 ray distances (read)
     'reward': (10, 11),     # slot 10: reward (read)
     'done': (11, 12),       # slot 11: done flag (read)
+    'Time_Remaining': (12,13)
 }
 
 #10 OBS
-slot_count = 12
+slot_count = 13
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
 TAGNAME = 'unity_ram2'  # mmap tag used by Unity too
@@ -47,18 +48,18 @@ INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
 global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop, SIGNAL_CODE
 SIGNAL_CODE = -999.0
-BATCH_SIZE_TARGET=2400
+BATCH_SIZE_TARGET=1200
 Episode=0
 episode_steps=0
-Epochs=8
+Epochs=5
 MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
 start_saving_after_loop=20
 
 
 #Hyper parameters
-gamma=0.99 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
+gamma=0.98 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
 gae_lambda=0.95# "How much do I trust my specific memories vs. my general intuition?"
-entropy_coefficient=0.01 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
+entropy_coefficient=0.008 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -84,7 +85,8 @@ def Read_obs():      # 8 floats
     Wallrays = read_slots(mm, *slots_config['ray_distances'])      # 4 floats
     Player_pos = read_slots(mm, *slots_config['player_position'])   # 2 floats
     Goal_pos = read_slots(mm, *slots_config['goal_position'])       # 2 floats
-    obs = np.array(list(Wallrays) + list(Player_pos) + list(Goal_pos), dtype=np.float32)
+    Time = read_slots(mm, *slots_config['Time_Remaining'])       # 1 float
+    obs = np.array(list(Wallrays) + list(Player_pos) + list(Goal_pos) + Time, dtype=np.float32)
     
         # Sanity checks: replace any NaN/Inf with a safe fallback
     if np.isnan(obs).any() or np.isinf(obs).any():
@@ -101,7 +103,7 @@ def reset():
     episode_steps = 0
     print(f"Starting Episode: {Episode}")
 
-def step(action_logits,value):
+def step(action_logits,value,old_obs):
     global episode_steps, Episode
     episode_steps += 1
     
@@ -143,13 +145,13 @@ def step(action_logits,value):
     reward = read_slots(mm, *slots_config['reward'])[0]
     done = bool(read_slots(mm, *slots_config['done'])[0])
 
-    if reward>=1 or reward<=-1:
+    if reward>=3 or reward<=-3:
         print("Non Passive: ", reward,"\n")
     
     # Save the combined action [speed, steer] for the training buffer
     final_action_indices = [speed_idx, steer_idx]
     
-    trajectories(obs, final_action_indices, total_log_prob, reward, done, value)
+    trajectories(old_obs, final_action_indices, total_log_prob, reward, done, value)
 
     if done:
         print(f"Episode {Episode} ended after {episode_steps} steps.")
@@ -226,37 +228,38 @@ def load_model(mm, model_path):
         time.sleep(0.001) 
 # -------------------------
 def train_model(mm, model_path):
-    global Episode
+    global Episode, start_saving_after_loop
     globals()['mm'] = mm
     globals()['step_wait'] = 0.04
-
-    # Define Initializers
-    # Gain 1.414 is standard for ReLU layers in PPO
-    init_hidden = tf.keras.initializers.Orthogonal(gain=1.414)
-    # Gain 0.01 makes the final output very small (near 0) -> Equal probabilities
-    init_final = tf.keras.initializers.Orthogonal(gain=0.01)
-
+    initial_lr = 0.0003
+    max_loops = 100 # The point where LR hits its minimum
+    min_lr = 0.00005
+    current_lr=initial_lr
+ 
     # Create Optimizers
-    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003, clipnorm=0.5)
-    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003, clipnorm=0.5)
+    actor_optimizer = tf.keras.optimizers.Adam(learning_rate=current_lr, clipnorm=0.5)
+    critic_optimizer = tf.keras.optimizers.Adam(learning_rate=current_lr, clipnorm=0.5)
     clip_ratio = 0.2
-
+        
+    
+    # Gain 1.0 is the standard for Tanh layers in PPO/SB3
+    init_hidden = tf.keras.initializers.Orthogonal(gain=1.0) 
+    init_final = tf.keras.initializers.Orthogonal(gain=0.01)
+    
     actor = Sequential([
-        tf.keras.layers.Input(shape=(26,)),
-        Dense(128, activation='relu', kernel_initializer=init_hidden),
-        Dense(128, activation='relu', kernel_initializer=init_hidden),
-        Dense(6, kernel_initializer=init_final)  # [Speed_Logits(3), Steer_Logits(3)]
+        tf.keras.layers.Input(shape=(9,)),
+        Dense(64, activation='tanh', kernel_initializer=init_hidden),
+        Dense(64, activation='tanh', kernel_initializer=init_hidden),
+        Dense(6, kernel_initializer=init_final) 
     ])
-
-    # CRITIC: Outputs 1 value estimate
+    
     critic = Sequential([
-        tf.keras.layers.Input(shape=(26,)),
-        Dense(128, activation='relu', kernel_initializer=init_hidden),
-        Dense(128, activation='relu', kernel_initializer=init_hidden),
+        tf.keras.layers.Input(shape=(9,)),
+        Dense(64, activation='tanh', kernel_initializer=init_hidden),
+        Dense(64, activation='tanh', kernel_initializer=init_hidden),
         Dense(1, kernel_initializer=tf.keras.initializers.Orthogonal(gain=1.0))
     ])
     
-
     print("Starting adaptive training...")
 
     # ### NEW CODE: Setup Saving Variables ###
@@ -294,7 +297,7 @@ def train_model(mm, model_path):
             all_rewards_tf=tf.stack(all_rewards,axis=0)
             all_dones_tf=tf.cast(tf.stack(all_dones,axis=0),tf.float32)
             all_values_tf=tf.stack(all_values,axis=0)
-
+            
             # Get the total number of steps collected (T)
             T = tf.shape(all_rewards_tf)[0]
             sum_rewards = tf.reduce_sum(all_rewards_tf)
@@ -302,9 +305,9 @@ def train_model(mm, model_path):
             current_batch_reward = float(sum_rewards.numpy())
             print("\n========================================")
             print(f"Total Rewards in Batch: {current_batch_reward:.2f}") # Use .numpy() to see the number!
-            print("The number of steps: ", T, "\nBatches: ", T % MINI_BATCH_SIZE)
+            print("The number of steps: ", T, "\nBatches: ", T / MINI_BATCH_SIZE)
             print("========================================\n")
-        
+            
             # Get Bootstrapping Value ---
             # We need the value for the state that the batch ended on (current_obs)
             # Assuming 'current_obs' is the observation from the final step's 'step()' call
@@ -449,13 +452,14 @@ def train_model(mm, model_path):
                     
                     del tape # Free up memory
                 
-            if Loop >= start_saving_after_loop:
+            if Loop >= start_saving_after_loop or Loop >= (start_saving_after_loop + 15):
                 if current_batch_reward > best_batch_reward:
                     print(f"New Record ({current_batch_reward:.2f} > {best_batch_reward:.2f})! Saving Checkpoint...")
                     best_batch_reward = current_batch_reward
+                    start_saving_after_loop=Loop
                     
                     # Create a specific name like: Loop_25_Reward_450.0
-                    save_name = f"Loop_{Loop}_Reward_{int(best_batch_reward)}"
+                    save_name = f"Base_Loop_{Loop}_Reward_{int(best_batch_reward)}"
                     save_path = os.path.join(checkpoint_dir, save_name)
                     
                     # Save the Actor model in SavedModel format (Using low-level TF save)
@@ -465,6 +469,15 @@ def train_model(mm, model_path):
                     tf.saved_model.save(actor, model_path)
             else:
                 print(f"Warming up... (Loop {Loop}/{start_saving_after_loop})")
+            
+            lr_fraction = max(0, 1.0 - (Loop / max_loops))
+            current_lr = min_lr + (initial_lr - min_lr) * lr_fraction
+            
+            # Apply the new learning rate to the optimizers
+            actor_optimizer.learning_rate.assign(current_lr)
+            critic_optimizer.learning_rate.assign(current_lr)
+            
+            print(f"Learning Rate decayed to: {current_lr:.6f}")
             
             # Clear buffers for next batch
             all_obs.clear()
@@ -490,7 +503,7 @@ def train_model(mm, model_path):
         
         # 3. Step the environment
         # We use [0] to remove the batch dimension, passing just the data
-        new_obs, reward, done = step(logits[0], value[0])
+        new_obs, reward, done = step(logits[0], value[0], current_obs)
         
         # 4. Update state for next loop
         current_obs = new_obs
@@ -504,7 +517,7 @@ def train_model(mm, model_path):
 def main():
     # Relative actor path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "C:\\Unity Projects\\PPO.py_Car_with_UnityEnv\\Python\\checkpoints\\Loop_20_Reward_611")
+    model_path = os.path.join(script_dir, "C:\\Unity Projects\\PPO.py_Car_with_UnityEnv\\Python\\Working AI\Base_Loop_106_Reward_-508")
 
     # Mode and other configs hardcoded
     print("(T)rain or (I)nfer?",end=' ')
@@ -526,7 +539,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
