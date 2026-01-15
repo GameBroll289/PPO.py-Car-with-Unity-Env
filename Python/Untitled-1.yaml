@@ -1,0 +1,17 @@
+Hyperparameters:
+  batch_size: 1200           # Total steps before updating
+  mini_batch_size: 64        # Batch size for each gradient update
+  epochs: 5                  # Number of passes through the batch
+  gamma: 0.98                # Discount factor (Future rewards)
+  gae_lambda: 0.95           # Generalized Advantage Estimation
+  entropy_coefficient: 0.008 # Exploration "curiosity"
+  clip_ratio: 0.2            # PPO clipping range
+
+learning_rate_schedule:
+  initial_lr: 0.0003        # Starting learning rate
+  min_lr: 0.00005           # Minimum learning rate
+  decay_loops: 100          # How many loops to decay over
+
+system:
+  seed: 42
+  save_interval_loops: 20   # Save every X loops
