@@ -15,3 +15,14 @@ learning_rate_schedule:
 system:
   seed: 42
   save_interval_loops: 20   # Save every X loops
+  Model_save_path: ./Python/checkpoints/
+  Model_inference_path: ./Python/checkpoints/Base_Loop_106_Reward_-508 #Example ./Python/checkpoints/Base_Loop_106_Reward_-508
+
+ram_mapping: #Needs be be sync with the env
+  Tagname: unity_ram2  #MMap tag name
+  action_size: 2       #First 2 bytes of RAM
+  observation_size: 9  #First 9 bytes of RAM after action
+  done_size: 1         #Next byte of RAM after observation
+  reward_size: 1       #Next byte of RAM after done
+
+

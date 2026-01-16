@@ -10,6 +10,30 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 import random
 
+global config, Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop, SIGNAL_CODE
+
+def load_config(config_path="config.yaml"):
+    with open(config_path, 'r') as file:
+        return yaml.safe_load(file)
+
+# 1. Get the folder where this python script lives
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Find config.yaml in the PREVIOUS folder (Parent directory)
+# ".." means "go up one level"
+config_path = os.path.join(script_dir, "..", "config.yaml")
+
+# Check if it actually exists to avoid confusing errors later
+if not os.path.exists(config_path):
+    raise FileNotFoundError(f"Could not find config.yaml at: {config_path}")
+
+# 3. Load the Config
+config = load_config(config_path)
+
+# 4. Get the 'Root' folder (Where config.yaml is located)
+# We will join all YAML paths to THIS, not script_dir
+project_root = os.path.dirname(os.path.abspath(config_path))
+
 # Define a specific number (can be anything, 42 is tradition)
 SEED_VALUE = 42
 
@@ -27,39 +51,47 @@ print(f"Random Seed set to: {SEED_VALUE}")
 # ------------------------
 # Shared-memory configuration (match your Unity layout)
 # ------------------------
-slots_config = {
-    'actions': (0, 2),       # slots 0-1: vertical, horizontal (write)
-    'player_position': (2, 4), # slots 2-3: x,y (read)
+'''
+slots_config = { 
+    'actions': (0, 2),  # slots 0-1: vertical, horizontal (write)
+    'player_position': (2, 4),  # slots 2-3: x,y (read)
     'goal_position': (4, 6),   # slots 4-5: x,y (read)
-    'ray_distances': (6, 10), # slots 6-9: 4 ray distances (read)
-    'reward': (10, 11),     # slot 10: reward (read)
+    'ray_distances': (6, 10),   # slots 6-9: 4 ray distances (read)
+    'Time_Remaining': (10, 11),     # slot 10: Time_Remaining (read)
     'done': (11, 12),       # slot 11: done flag (read)
-    'Time_Remaining': (12,13)
+    'reward': (12,13)       # slot 12: reward (read)
 }
 
-#10 OBS
-slot_count = 13
+#Example config for RAM mapping
+'''
+
+slot_config = {
+    "actions": (0, config['ram_mapping']['action_size']),  # slots: actions (write)
+    "observation": (config['ram_mapping']['action_size'], config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size']),  # slots: observations (read)
+    "done": (config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'], config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'] + config['ram_mapping']['done_size']),       # slot: done flag (read)
+    "reward": (config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'] + config['ram_mapping']['done_size'], config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'] + config['ram_mapping']['done_size'] + config['ram_mapping']['reward_size'])        # slot: reward (read)
+}
+
+slot_count = config['ram_mapping']['observation_size'] + config['ram_mapping']['action_size'] + config['ram_mapping']['done_size'] + config['ram_mapping']['reward_size']
 slot_size = 4  # float32
 size_bytes = slot_count * slot_size
-TAGNAME = 'unity_ram2'  # mmap tag used by Unity too
+TAGNAME = config['ram_mapping']['Tagname']
 
 # Mapping discrete indices -> -1,0,1
 INDEX_TO_CMD = [-1.0, 0.0, 1.0]
 
-global Episode, Episodes_Per_Batch, step_wait, episode_steps, Epochs, MINI_BATCH_SIZE, mm, BATCH_SIZE_TARGET, start_saving_after_loop, SIGNAL_CODE
 SIGNAL_CODE = -999.0
-BATCH_SIZE_TARGET=1200
+BATCH_SIZE_TARGET=config['hyperparameters']['batch_size']
 Episode=0
 episode_steps=0
-Epochs=5
-MINI_BATCH_SIZE = 64 # Or another power of 2, often 64 or 128
-start_saving_after_loop=20
-
-
+Epochs=config['hyperparameters']['epochs']
+MINI_BATCH_SIZE = config['hyperparameters']['mini_batch_size']
+start_saving_after_loop=config['system']['save_interval_loops']
+# -------------------------
 #Hyper parameters
-gamma=0.98 #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
-gae_lambda=0.95# "How much do I trust my specific memories vs. my general intuition?"
-entropy_coefficient=0.008 #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
+gamma=config['hyperparameters']['gamma'] #How much later rewards are worth, Goes from 0.95=< to >=0.99. With higher values, the agent will consider future rewards more strongly.
+gae_lambda=config['hyperparameters']['gae_lambda']# "How much do I trust my specific memories vs. my general intuition?"
+entropy_coefficient=config['hyperparameters']['entropy_coefficient'] #The "Curiosity" Knob: Higher values encourage more exploration by adding an entropy bonus to the loss function. Between 0.001 and 0.01 and 0.1 usually.
 # -------------------------
 # Memory map helpers
 # -------------------------
@@ -227,19 +259,34 @@ def load_model(mm, model_path):
             # Busy wait is fine here, or very short sleep
         time.sleep(0.001) 
 # -------------------------
-def train_model(mm, model_path):
+def train_model(mm, model_path, config):
     global Episode, start_saving_after_loop
     globals()['mm'] = mm
-    globals()['step_wait'] = 0.04
-    initial_lr = 0.0003
-    max_loops = 100 # The point where LR hits its minimum
-    min_lr = 0.00005
-    current_lr=initial_lr
+    
+    # Load from Config --------------------------
+    hp = config['hyperparameters']
+    lr_sched = config['learning_rate_schedule']
+    
+    BATCH_SIZE_TARGET = hp['batch_size']
+    MINI_BATCH_SIZE = hp['mini_batch_size']
+    Epochs = hp['epochs']
+    gamma = hp['gamma']
+    gae_lambda = hp['gae_lambda']
+    entropy_coefficient = hp['entropy_coefficient']
+    clip_ratio = hp['clip_ratio']
+    
+    initial_lr = lr_sched['initial_lr']
+    min_lr = lr_sched['min_lr']
+    max_loops = lr_sched['decay_loops']
+    
+    start_saving_after_loop = config['system']['save_interval_loops']
+    # -------------------------------------------
+
+    current_lr = initial_lr
  
     # Create Optimizers
     actor_optimizer = tf.keras.optimizers.Adam(learning_rate=current_lr, clipnorm=0.5)
     critic_optimizer = tf.keras.optimizers.Adam(learning_rate=current_lr, clipnorm=0.5)
-    clip_ratio = 0.2
         
     
     # Gain 1.0 is the standard for Tanh layers in PPO/SB3
@@ -247,14 +294,14 @@ def train_model(mm, model_path):
     init_final = tf.keras.initializers.Orthogonal(gain=0.01)
     
     actor = Sequential([
-        tf.keras.layers.Input(shape=(9,)),
+        tf.keras.layers.Input(shape=(config['ram_mapping']['observation_size'],)),
         Dense(64, activation='tanh', kernel_initializer=init_hidden),
         Dense(64, activation='tanh', kernel_initializer=init_hidden),
         Dense(6, kernel_initializer=init_final) 
     ])
     
     critic = Sequential([
-        tf.keras.layers.Input(shape=(9,)),
+        tf.keras.layers.Input(shape=(config['ram_mapping']['observation_size'],)),
         Dense(64, activation='tanh', kernel_initializer=init_hidden),
         Dense(64, activation='tanh', kernel_initializer=init_hidden),
         Dense(1, kernel_initializer=tf.keras.initializers.Orthogonal(gain=1.0))
@@ -460,7 +507,7 @@ def train_model(mm, model_path):
                     
                     # Create a specific name like: Loop_25_Reward_450.0
                     save_name = f"Base_Loop_{Loop}_Reward_{int(best_batch_reward)}"
-                    save_path = os.path.join(checkpoint_dir, save_name)
+                    save_path = os.path.join(config['system']['Model_save_path'], save_name)
                     
                     # Save the Actor model in SavedModel format (Using low-level TF save)
                     tf.saved_model.save(actor, save_path)
@@ -515,24 +562,34 @@ def train_model(mm, model_path):
             current_obs = Read_obs() # Get fresh observation for new episode
 # -------------------------
 def main():
-    # Relative actor path
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "C:\\Unity Projects\\PPO.py_Car_with_UnityEnv\\Python\\Working AI\Base_Loop_106_Reward_-508")
+    global config
+    # --- FIXING YOUR PATHS ---
+    
+    # Watch out! In your YAML you used "Model_inference_path" (Capital M)
+    # In Python, you must match that exactly.
+    relative_model_path = config['system']['Model_inference_path']
+    
+    # Combine Project Root + Relative Path from YAML
+    # This turns "./Python/checkpoints/..." into "C:/Projects/.../Python/checkpoints/..."
+    model_path = os.path.normpath(os.path.join(project_root, relative_model_path))
 
-    # Mode and other configs hardcoded
-    print("(T)rain or (I)nfer?",end=' ')
-    if input().lower().startswith('t'):
-        mode = "train"
-    else:
-        mode = "load"
-    stepwait = 0.04
-    # open mmap
+    # Set Seed from config
+    SEED_VALUE = config['system']['seed']
+    os.environ['PYTHONHASHSEED'] = str(SEED_VALUE)
+    random.seed(SEED_VALUE)
+    np.random.seed(SEED_VALUE)
+    tf.random.set_seed(SEED_VALUE)
+    print(f"Random Seed set to: {SEED_VALUE}")
+
+    print("(T)rain or (I)nfer?", end=' ')
+    user_input = input().lower()
+    
     mm = open_mmap()
 
-    if mode == "load":
-        load_model(mm, model_path)
-    elif mode == "train":
-        train_model(mm, model_path)
+    if user_input.startswith('t'):
+        train_model(mm, model_path, config) 
+    else:
+        load_model(mm, model_path, config)
 
     mm.close()
 
