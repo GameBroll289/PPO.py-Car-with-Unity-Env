@@ -3,19 +3,22 @@ using System.IO.MemoryMappedFiles;
 using System;
 using System.Runtime.InteropServices;
 
+namespace one{
+
 public class AICarController : MonoBehaviour
 {
     public float speed;
     public float turnSpeed;
     private Rigidbody2D rb;
     const string memoryName = "unity_ram";
+    private const float SIGNAL_CODE = -999.0f;
     private MemoryMappedFile mmf;
     private MemoryMappedViewAccessor accessor;
     private const int slotSize = 4;
     private const int actionStart = 18;
     private const int actionCount = 2;
 
-    const int slotCount = 29;   // must match Python
+    const int slotCount = 30;   // must match Python
     const int totalSize = slotCount * slotSize;
 
     void Start()
@@ -34,10 +37,13 @@ public class AICarController : MonoBehaviour
         float move = ReadSlot(actionStart + 0);
         float turn = ReadSlot(actionStart + 1);
 
-        rb.AddForce(transform.up * (move * speed * Time.deltaTime), ForceMode2D.Force);
-        // rb.MoveRotation(rb.rotation - (turn * turnSpeed * Time.deltaTime));
-        // rb.AddForce(transform.up * move, ForceMode2D.Force);
-        rb.AddTorque(-turn * turnSpeed * Time.deltaTime, ForceMode2D.Force);
+        // IF PYTHON HASN'T SENT A NEW COMMAND, WAIT.
+        if (move == SIGNAL_CODE) return;
+        rb.AddForce(transform.up * (move * speed), ForceMode2D.Force);
+        rb.AddTorque(-turn * turnSpeed, ForceMode2D.Force);
+
+        // TELL PYTHON: "I FINISHED THIS FRAME"
+        WriteFloat(actionStart + 0, SIGNAL_CODE);
     }
 
     float ReadSlot(int index)
@@ -52,4 +58,10 @@ public class AICarController : MonoBehaviour
         accessor?.Dispose();
         mmf?.Dispose();
     }
+
+    void WriteFloat(int slot, float value)
+    {
+        accessor.Write(slot * slotSize, value);
+    }
+}
 }

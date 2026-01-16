@@ -1,5 +1,15 @@
-Set Eval according to eipsodes. 
+Make the env reset after a set amount of time
 
-Figure out the clipped advantage and fine tune it
+Give rewards if a target goal is hitting the ray
 
-Add another raycasting layer so that AI aint blind cause of goals in the way
+Show the sum_rewards in the batch eval and save the highest few
+
+Increased punishment gradually as the loops increase
+
+Work on better synchronization
+
+Add goal being masked when colliding with car
+
+Add soft dones. 
+Mentioning that you "Correctly handle Truncation vs. Termination to prevent value-function bias" 
+is a high-level concept that separates junior developers from senior AI engineers.

@@ -1,0 +1,28 @@
+Hyperparameters:
+  batch_size: 1200           # Total steps before updating
+  mini_batch_size: 64        # Batch size for each gradient update
+  epochs: 5                  # Number of passes through the batch
+  gamma: 0.98                # Discount factor (Future rewards)
+  gae_lambda: 0.95           # Generalized Advantage Estimation
+  entropy_coefficient: 0.008 # Exploration "curiosity"
+  clip_ratio: 0.2            # PPO clipping range
+
+learning_rate_schedule:
+  initial_lr: 0.0003        # Starting learning rate
+  min_lr: 0.00005           # Minimum learning rate
+  decay_loops: 100          # How many loops to decay over
+
+system:
+  seed: 42
+  save_interval_loops: 20  # Save every X loops
+  Model_save_path: ./Python/checkpoints/
+  Model_inference_path: ./Python/checkpoints/Base_Loop_106_Reward_-508 #Example: ./Python/checkpoints/Base_Loop_106_Reward_-508
+
+ram_mapping: #Needs be be sync with the env
+  Tagname: unity_ram2  #MMap tag name
+  action_size: 2       #First 2 bytes of RAM
+  observation_size: 9  #First 9 bytes of RAM after action
+  done_size: 1         #Next byte of RAM after observation
+  reward_size: 1       #Next byte of RAM after done
+
+

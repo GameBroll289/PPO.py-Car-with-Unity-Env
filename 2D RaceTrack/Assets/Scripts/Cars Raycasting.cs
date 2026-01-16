@@ -4,11 +4,12 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 
-
+namespace one{
 public class CarRaycastSensor2D : MonoBehaviour
 {
+    public float StartingTime = 60f;
     public static float speed;
-    public static float reward = 0.01f;
+    public static float reward = -0.02f;
     public float rayLength = 10f;
     public LayerMask obstacleMask, WallMask;
 
@@ -18,19 +19,26 @@ public class CarRaycastSensor2D : MonoBehaviour
 
     private Vector2[] localDirections = new Vector2[8]
     {
-        Vector2.up,                                      // Front
-        (Vector2.up + Vector2.right).normalized,         // Front-Right
-        Vector2.right,                                   // Right
-        (-Vector2.up + Vector2.right).normalized,        // Back-Right
-        Vector2.down,                                    // Back
-        (-Vector2.up - Vector2.right).normalized,        // Back-Left
-        Vector2.left,                                    // Left
-        (Vector2.up - Vector2.right).normalized          // Front-Left
+    new Vector2( 0f,  1f),                 // 0°   Front (Up)
+    new Vector2( 0.38268343f,  0.92387953f), // 22.5°  Front–FrontRight
+    //new Vector2( 0.70710678f,  0.70710678f), // 45°   Front-Right
+    //new Vector2( 0.92387953f,  0.38268343f), // 67.5° FrontRight–Right
+    new Vector2( 1f,  0f),                 // 90°   Right
+    //new Vector2( 0.92387953f, -0.38268343f), // 112.5° Right–BackRight
+    //new Vector2( 0.70710678f, -0.70710678f), // 135°  Back-Right
+    new Vector2( 0.38268343f, -0.92387953f), // 157.5° BackRight–Back
+    new Vector2( 0f, -1f),                 // 180°  Back (Down)
+    new Vector2(-0.38268343f, -0.92387953f), // 202.5° Back–BackLeft
+    //new Vector2(-0.70710678f, -0.70710678f), // 225°  Back-Left
+    //new Vector2(-0.92387953f, -0.38268343f), // 247.5° BackLeft–Left
+    new Vector2(-1f,  0f),                 // 270°  Left
+    //new Vector2(-0.92387953f,  0.38268343f), // 292.5° Left–FrontLeft
+    //new Vector2(-0.70710678f,  0.70710678f), // 315°  Front-Left
+    new Vector2(-0.38268343f,  0.92387953f),  // 337.5° FrontLeft–Front
     };
-    
     // Memory Mapped File variables
     const string memoryName = "unity_ram";
-    const int slotCount = 29;   // must match Python
+    const int slotCount = 30;   // must match Python
     const int slotSize = 4;     // float32
     const int totalSize = slotCount * slotSize;
 
@@ -97,23 +105,20 @@ public class CarRaycastSensor2D : MonoBehaviour
             }
         }
 
-        speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 11f;
+        speed = GetComponent<Rigidbody2D>().linearVelocity.magnitude / 2f;
 
         // Write state to shared memory
         WriteFloats(0, rayDistances);
         WriteFloats(8, HitsInfo);
-        WriteFloat(16, reward); // Cumulative reward
+        WriteFloat(16, CarRaycastSensor2D.reward+speed); // Cumulative reward
         WriteFloat(17, Car.done);
-        WriteFloat(20, (speed)); // Speed normalized
+        WriteFloat(20, speed); // Speed normalized
         WriteFloats(21, WallDistances);
+        WriteFloat(29, Car.Time_Rimaining/StartingTime); // Placeholder
         accessor.Flush();
 
-        // Read actions back from Python
-        float acceleration = ReadFloat(18); //3
-        float steering = ReadFloat(19); //4
-
         // Debug.Log to console
-        Debug.Log($"R: {reward}");
+        Debug.Log($"R: {CarRaycastSensor2D.reward+speed}");
         //Debug.Log($"{acceleration};{steering};Reward: {reward};{Car.done};{(GetComponent<Rigidbody2D>().linearVelocity.magnitude / 5f)}; WallRays: {string.Join(",", WallDistances)}; Rays: {string.Join(",", rayDistances)}; Hits: {string.Join(";", HitsInfo)}");
         //Car.done = 0;
     }
@@ -145,4 +150,5 @@ public class CarRaycastSensor2D : MonoBehaviour
     {
         return accessor.ReadSingle(slot * slotSize);
     }
+}
 }
