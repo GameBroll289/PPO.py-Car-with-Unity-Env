@@ -3,6 +3,7 @@ import numpy as np
 import mmap
 import struct
 import os
+import yaml
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -33,21 +34,6 @@ config = load_config(config_path)
 # 4. Get the 'Root' folder (Where config.yaml is located)
 # We will join all YAML paths to THIS, not script_dir
 project_root = os.path.dirname(os.path.abspath(config_path))
-
-# Define a specific number (can be anything, 42 is tradition)
-SEED_VALUE = 42
-
-# 1. Lock Python's internal random generator
-os.environ['PYTHONHASHSEED'] = str(SEED_VALUE)
-random.seed(SEED_VALUE)
-
-# 2. Lock NumPy (used for processing obs)
-np.random.seed(SEED_VALUE)
-
-# 3. Lock TensorFlow (used for weights and action sampling)
-tf.random.set_seed(SEED_VALUE)
-
-print(f"Random Seed set to: {SEED_VALUE}")
 # ------------------------
 # Shared-memory configuration (match your Unity layout)
 # ------------------------
@@ -65,7 +51,7 @@ slots_config = {
 #Example config for RAM mapping
 '''
 
-slot_config = {
+slots_config = {
     "actions": (0, config['ram_mapping']['action_size']),  # slots: actions (write)
     "observation": (config['ram_mapping']['action_size'], config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size']),  # slots: observations (read)
     "done": (config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'], config['ram_mapping']['action_size'] + config['ram_mapping']['observation_size'] + config['ram_mapping']['done_size']),       # slot: done flag (read)
@@ -114,11 +100,7 @@ def write_slots(mm, start, end, values):
     mm.flush()
 # -------------------------
 def Read_obs():      # 8 floats
-    Wallrays = read_slots(mm, *slots_config['ray_distances'])      # 4 floats
-    Player_pos = read_slots(mm, *slots_config['player_position'])   # 2 floats
-    Goal_pos = read_slots(mm, *slots_config['goal_position'])       # 2 floats
-    Time = read_slots(mm, *slots_config['Time_Remaining'])       # 1 float
-    obs = np.array(list(Wallrays) + list(Player_pos) + list(Goal_pos) + Time, dtype=np.float32)
+    obs = np.array(read_slots(mm, *slots_config['observation']))  # Full observation read
     
         # Sanity checks: replace any NaN/Inf with a safe fallback
     if np.isnan(obs).any() or np.isinf(obs).any():
@@ -131,7 +113,7 @@ def reset():
     global Episode, episode_steps
     # Optionally: write neutral actions and wait a short bit
     write_slots(mm, *slots_config['actions'], values=[0.0, 0.0])  # neutral
-    time.sleep(step_wait)
+    time.sleep(0.25)  # Give Unity time to reset
     episode_steps = 0
     print(f"Starting Episode: {Episode}")
 
@@ -542,7 +524,8 @@ def train_model(mm, model_path, config):
         # STEP 4: Collect Data (The Fix)
         # ----------------------------------------------------
         # 1. Prepare the input: Add batch dimension (25,) -> (1, 25)
-        obs_tensor = tf.convert_to_tensor(current_obs[None, :], dtype=tf.float32)
+        # # Convert to numpy array first
+        obs_tensor = tf.convert_to_tensor(np.array(current_obs)[None, :], dtype=tf.float32)
         
         # 2. Run the networks
         logits = actor(obs_tensor)  # Get raw action scores
@@ -589,7 +572,7 @@ def main():
     if user_input.startswith('t'):
         train_model(mm, model_path, config) 
     else:
-        load_model(mm, model_path, config)
+        load_model(mm, model_path)
 
     mm.close()
 

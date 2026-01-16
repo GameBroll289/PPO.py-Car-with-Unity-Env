@@ -85,9 +85,9 @@ public class Player_Raycast : MonoBehaviour
         // Write state to shared memory
         WriteFloats(2, obs);//Goal and player x & y positions
         WriteFloats(6, WallDistances);
-        WriteFloat(10, reward); // Cumulative reward
+        WriteFloat(12, reward); // Cumulative reward
         WriteFloat(11, done);
-        WriteFloat(12, Player.Time_Rimaining/20f); // Normalized time remaining
+        WriteFloat(10, Player.Time_Rimaining/20f); // Normalized time remaining
         accessor.Flush();
     }
 

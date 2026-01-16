@@ -14,9 +14,9 @@ learning_rate_schedule:
 
 system:
   seed: 42
-  save_interval_loops: 20   # Save every X loops
+  save_interval_loops: 20  # Save every X loops
   Model_save_path: ./Python/checkpoints/
-  Model_inference_path: ./Python/checkpoints/Base_Loop_106_Reward_-508 #Example ./Python/checkpoints/Base_Loop_106_Reward_-508
+  Model_inference_path: ./Python/checkpoints/Base_Loop_106_Reward_-508 #Example: ./Python/checkpoints/Base_Loop_106_Reward_-508
 
 ram_mapping: #Needs be be sync with the env
   Tagname: unity_ram2  #MMap tag name
